@@ -1,0 +1,14 @@
+ansible_connection: ssh
+ansible_user: vagrant
+ansible_port: 22
+ansible_ssh_private_key_file: "{{ inventory_dir }}/../.vagrant/machines/{{ inventory_hostname }}/libvirt/private_key"
+
+linux_defaults:
+  provider_options:
+    memory_backing: memfd
+    sync_folders:
+      - enabled: true
+        type: virtiofs
+        host_path: .
+        guest_path: /vagrant
+        readonly: false

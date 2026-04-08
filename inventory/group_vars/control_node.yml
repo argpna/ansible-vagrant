@@ -1,0 +1,17 @@
+controller:
+  python:
+    source_version: "3.11.1"
+    venv_path: /home/ansible/controller-venv
+  ansible:
+    package_spec: ansible==12.3.0
+    python_packages:
+      - pypsrp==0.9.0
+      - pywinrm==0.5.0
+      - requests-kerberos==0.15.0
+      - requests-credssp==2.0.0
+      - gssapi==1.11.1
+  admin_user:
+    name: ansible
+    group: ansible-admin
+    password_hash: "$6$OpPwep0n4zujElhs$gWIk6yiEIYVg9h8rcs.Nq8fgas0TSgC/3Wc.Y2SHhvtFfO74Kc63RNaZBY119UAc7kfg1MEbkCIzTod2ksedp1"
+    authorized_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7zoTeDWENzfCBvlqpEJoQdsGHGlP/CeC1UIpaB31WJWnkmWSrHltzw8xVD6m2dn0ZGZxlqGX1awCnWao2zQPAYpOAuReTV7RpT9+ehSfREwbGMYO22kqSITw19ZTCvqZSM1bxirdgreJ7cM7/wFcVc7WUphccFA72V2giNhyNCQU5IQbBGIjODsE6Tmfk4DUkLwRjf9GOriJQY7L11Vn1Of8bRfqKv7E7s6QpvVnnNty2CsocGR07CGQDCL379+5TQJElPsLSajk/TV42+yUDdmYupugtvOkSaBlQLb2wbP6WMmS5JTPLVgHVQKF23kRhW/K0PIbyEecoLDze1dQ5"
