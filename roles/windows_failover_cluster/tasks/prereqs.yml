@@ -1,0 +1,79 @@
+---
+- name: assert required failover cluster settings are present
+  ansible.builtin.assert:
+    that:
+      - mssql.cluster.name is defined
+      - mssql.cluster.witness.type is defined
+      - mssql.cluster.witness.host is defined
+      - mssql.cluster.witness.path is defined
+      - mssql.topology.nodes is defined
+      - mssql.topology.nodes | length >= 2
+    fail_msg: >-
+      mssql.cluster and mssql.topology must define the failover cluster identity,
+      witness settings, and at least two MSSQL Windows cluster hosts.
+
+- name: require the MSSQL Windows cluster host to be domain joined
+  ansible.windows.win_powershell:
+    script: |
+      $ErrorActionPreference = 'Stop'
+
+      $computerSystem = Get-CimInstance -ClassName Win32_ComputerSystem
+      [pscustomobject]@{
+        PartOfDomain = [bool]$computerSystem.PartOfDomain
+        Domain = [string]$computerSystem.Domain
+      } | ConvertTo-Json -Compress
+  register: windows_failover_cluster_domain_state
+  changed_when: false
+
+- name: fail when the MSSQL Windows cluster host is not joined to the expected domain
+  ansible.builtin.assert:
+    that:
+      - (windows_failover_cluster_domain_state.output[0] | from_json).PartOfDomain
+      - ((windows_failover_cluster_domain_state.output[0] | from_json).Domain | lower) == (domain.name | lower)
+    fail_msg: >-
+      {{ inventory_hostname }} must be domain joined to {{ domain.name }}
+      before failover clustering prerequisites are installed.
+
+- name: install Windows Failover Clustering with management tools
+  ansible.windows.win_feature:
+    name: Failover-Clustering
+    state: present
+    include_management_tools: true
+  register: windows_failover_cluster_feature
+
+- name: reboot after failover clustering feature install when required
+  ansible.windows.win_reboot:
+  when: windows_failover_cluster_feature.reboot_required
+
+- name: validate failover cluster PowerShell cmdlets are available
+  ansible.windows.win_powershell:
+    script: |
+      $ErrorActionPreference = 'Stop'
+
+      $required = @(
+        'Get-Cluster',
+        'New-Cluster',
+        'Test-Cluster',
+        'Set-ClusterQuorum'
+      )
+
+      $missing = @()
+      foreach ($command in $required) {
+        if (-not (Get-Command -Name $command -ErrorAction SilentlyContinue)) {
+          $missing += $command
+        }
+      }
+
+      [pscustomobject]@{
+        Missing = @($missing)
+      } | ConvertTo-Json -Compress
+  register: windows_failover_cluster_cmdlets
+  changed_when: false
+
+- name: fail when required failover cluster cmdlets are unavailable
+  ansible.builtin.assert:
+    that:
+      - (windows_failover_cluster_cmdlets.output[0] | from_json).Missing | length == 0
+    fail_msg: >-
+      Missing failover cluster PowerShell cmdlets on {{ inventory_hostname }}:
+      {{ (windows_failover_cluster_cmdlets.output[0] | from_json).Missing | join(', ') }}

@@ -1,0 +1,8 @@
+---
+- name: validate libvirt host share inputs
+  ansible.builtin.import_tasks: validate.yml
+  when: libvirt_host_share_list | length > 0
+
+- name: attach libvirt host shares
+  ansible.builtin.import_tasks: attach.yml
+  when: libvirt_host_share_list | length > 0

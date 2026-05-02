@@ -1,0 +1,30 @@
+---
+- name: run preflight checks
+  ansible.builtin.import_tasks: preflight.yml
+
+- name: resolve managed lab networks
+  ansible.builtin.import_tasks: resolve_networks.yml
+
+- name: generate libvirt XML from inventory
+  ansible.builtin.import_tasks: generate_xml.yml
+  when:
+    - libvirt_host_network_state == 'present'
+    - libvirt_host_network_generate_xml | bool
+
+- name: manage libvirt network definitions
+  ansible.builtin.include_tasks: manage_network.yml
+  loop: "{{ libvirt_host_network_effective_networks }}"
+  loop_control:
+    loop_var: libvirt_host_network_item
+    label: "{{ libvirt_host_network_item.name }}"
+
+- name: manage firewalld libvirt zone
+  ansible.builtin.include_tasks: firewalld.yml
+  when:
+    - libvirt_host_network_state == 'present'
+    - libvirt_host_network_effective_manage_firewalld | bool
+
+- name: manage scoped outbound NAT
+  ansible.builtin.include_tasks: outbound_nat.yml
+  when:
+    - libvirt_host_network_effective_outbound_nat | bool or libvirt_host_network_state in ['absent', 'purged']

@@ -1,0 +1,72 @@
+---
+- name: assert required SQL Server setup settings are present
+  ansible.builtin.assert:
+    that:
+      - windows_sql_server.media_path is defined
+      - windows_sql_server.media_path is not none
+      - windows_sql_server.instance_name is defined
+      - windows_sql_server.features is defined
+      - windows_sql_server.features | length > 0
+      - windows_sql_server.state == 'present'
+      - windows_sql_server.service_accounts.manage
+    fail_msg: >-
+      windows_sql_server must define media_path, instance_name, and at least
+      one SQL Server feature before installation. This role currently expects
+      managed domain service accounts.
+
+- name: inspect the SQL Server instance state
+  win_sql_server_instance_info:
+    instance_name: "{{ windows_sql_server.instance_name }}"
+  register: windows_sql_server_instance
+  changed_when: false
+
+- name: install SQL Server with setup.exe
+  win_sql_server_setup:
+    state: present
+    media_path: "{{ windows_sql_server.media_path }}"
+    instance_name: "{{ windows_sql_server.instance_name }}"
+    features: "{{ windows_sql_server.features }}"
+    sqlsysadminaccounts: "{{ windows_sql_server.sqlsysadminaccounts }}"
+    security_mode: "{{ windows_sql_server.security_mode }}"
+    sa_password: "{{ windows_sql_server.sa_password | default(omit, true) }}"
+    sqlsvc_account: "{{ windows_sql_server_sqlsvc_account_effective }}"
+    sqlsvc_password: "{{ windows_sql_server_sqlsvc_password_effective }}"
+    agtsvc_account: "{{ windows_sql_server_agtsvc_account_effective }}"
+    agtsvc_password: "{{ windows_sql_server_agtsvc_password_effective }}"
+    browser_startup_type: "{{ windows_sql_server.browser_startup_type }}"
+    update_enabled: "{{ windows_sql_server.update_enabled }}"
+    update_source: "{{ windows_sql_server.update_source | default(omit, true) }}"
+    product_key: "{{ windows_sql_server.product_key | default(omit, true) }}"
+    install_shared_dir: "{{ windows_sql_server.install_shared_dir | default(omit, true) }}"
+    install_shared_wow_dir: "{{ windows_sql_server.install_shared_wow_dir | default(omit, true) }}"
+    instance_dir: "{{ windows_sql_server.instance_dir | default(omit, true) }}"
+    install_sql_data_dir: "{{ windows_sql_server.install_sql_data_dir | default(omit, true) }}"
+    sql_user_db_dir: "{{ windows_sql_server.sql_user_db_dir | default(omit, true) }}"
+    sql_user_db_log_dir: "{{ windows_sql_server.sql_user_db_log_dir | default(omit, true) }}"
+    sql_temp_db_dir: "{{ windows_sql_server.sql_temp_db_dir | default(omit, true) }}"
+    sql_temp_db_log_dir: "{{ windows_sql_server.sql_temp_db_log_dir | default(omit, true) }}"
+  register: windows_sql_server_setup_result
+  become: true
+  become_method: ansible.builtin.runas
+  vars:
+    ansible_become_user: System
+
+- name: reboot after SQL Server installation when required
+  ansible.windows.win_reboot:
+  when:
+    - windows_sql_server.reboot_if_required
+    - windows_sql_server_setup_result.reboot_required | default(false)
+
+- name: validate the SQL Server instance exists
+  win_sql_server_instance_info:
+    instance_name: "{{ windows_sql_server.instance_name }}"
+  register: windows_sql_server_instance_final
+  changed_when: false
+
+- name: require the SQL Server instance to exist
+  ansible.builtin.assert:
+    that:
+      - windows_sql_server_instance_final.exists
+    fail_msg: >-
+      SQL Server instance {{ windows_sql_server.instance_name }} was not found
+      after setup on {{ inventory_hostname }}.

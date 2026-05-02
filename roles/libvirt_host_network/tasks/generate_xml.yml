@@ -1,0 +1,24 @@
+---
+- name: ensure generated libvirt network definition directory exists
+  ansible.builtin.file:
+    path: "{{ libvirt_host_network_generated_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: generate libvirt network definitions from inventory
+  ansible.builtin.template:
+    src: network.xml.j2
+    dest: "{{ item.xml_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ libvirt_host_network_effective_networks }}"
+  loop_control:
+    label: "{{ item.name }}"
+  vars:
+    libvirt_host_network_default_network: >-
+      {{
+        libvirt_host_network_effective_networks[0].name
+      }}

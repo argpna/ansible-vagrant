@@ -1,0 +1,31 @@
+---
+- name: assert required cluster destruction settings are present
+  ansible.builtin.assert:
+    that:
+      - mssql.cluster.name is defined
+      - mssql.cluster.witness.type == 'file_share'
+      - mssql.cluster.witness.path is defined
+    fail_msg: >-
+      mssql.cluster must define the cluster name and witness settings before
+      cluster teardown.
+
+- name: remove the file share witness from quorum
+  win_failover_cluster_witness:
+    state: absent
+    path: "{{ mssql.cluster.witness.path }}"
+  when: mssql.cluster.witness.type == 'file_share'
+  become: true
+  become_method: ansible.builtin.runas
+  vars:
+    ansible_become_user: "{{ domain.admin.upn }}"
+    ansible_become_password: "{{ domain.admin.password }}"
+
+- name: remove the failover cluster
+  win_failover_cluster:
+    state: absent
+    name: "{{ mssql.cluster.name }}"
+  become: true
+  become_method: ansible.builtin.runas
+  vars:
+    ansible_become_user: "{{ domain.admin.upn }}"
+    ansible_become_password: "{{ domain.admin.password }}"

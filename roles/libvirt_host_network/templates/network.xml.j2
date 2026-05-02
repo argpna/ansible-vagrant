@@ -1,0 +1,29 @@
+<network xmlns:dnsmasq="http://libvirt.org/schemas/network/dnsmasq/1.0">
+  <name>{{ item.name }}</name>
+  <forward mode="{{ item.forward_mode | default('route') }}"/>
+  <bridge name="{{ item.bridge_name }}" stp="on" delay="0"/>
+  <ip address="{{ item.gateway }}" netmask="{{ item.netmask }}">
+    <dhcp>
+      <range start="{{ item.dhcp_range.start | default(item.gateway) }}" end="{{ item.dhcp_range.end | default(item.gateway) }}"/>
+{% for host_name in groups['all'] | default([]) | sort %}
+{%   set host = hostvars[host_name] %}
+{%   set declared_interfaces = host.interfaces.declared | default([]) %}
+{%   set attached_interface_names = host.interfaces.attached | default([]) %}
+{%   for iface in declared_interfaces %}
+{%     if iface.name | default('') in attached_interface_names %}
+{%     if iface.network | default('') == item.name %}
+{%       set iface_ip = iface.ip | default('') %}
+{%       set iface_mac = iface.mac | default('') %}
+{%       if iface_ip | length > 0 and iface_mac | length > 0 %}
+      <host mac="{{ iface_mac }}" name="{{ host_name }}" ip="{{ iface_ip }}"/>
+{%       endif %}
+{%     endif %}
+{%     endif %}
+{%   endfor %}
+{% endfor %}
+    </dhcp>
+  </ip>
+  <dnsmasq:options>
+    <dnsmasq:option value="dhcp-option=option:router,{{ item.gateway }}"/>
+  </dnsmasq:options>
+</network>

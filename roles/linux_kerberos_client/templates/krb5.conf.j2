@@ -1,0 +1,11 @@
+[libdefaults]
+  default_realm = {{ kerberos.realm | upper }}
+
+[realms]
+  {{ kerberos.realm | upper }} = {
+    kdc = {{ kerberos.kdc_host }}.{{ kerberos.realm | lower }}
+    admin_server = {{ kerberos.kdc_host }}.{{ kerberos.realm | lower }}
+  }
+
+[domain_realm]
+  .{{ kerberos.realm | lower }} = {{ kerberos.realm | upper }}

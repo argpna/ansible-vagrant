@@ -1,0 +1,12 @@
+---
+- name: require a supported libvirt lab network state
+  ansible.builtin.assert:
+    that:
+      - libvirt_host_network_state in ['present', 'absent', 'purged']
+    fail_msg: >-
+      libvirt_host_network_state must be one of: present, absent, purged.
+
+- name: require virsh to be installed on the host
+  ansible.builtin.command: virsh --version
+  register: libvirt_host_network_virsh_version
+  changed_when: false

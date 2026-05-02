@@ -1,0 +1,115 @@
+---
+- name: read current live libvirt domain XML
+  ansible.builtin.command:
+    argv:
+      - "{{ libvirt_host_share_virsh_bin }}"
+      - dumpxml
+      - "{{ libvirt_host_share_effective_domain }}"
+  register: libvirt_host_share_live_dumpxml
+  changed_when: false
+
+- name: read current persistent libvirt domain XML
+  ansible.builtin.command:
+    argv:
+      - "{{ libvirt_host_share_virsh_bin }}"
+      - dumpxml
+      - --inactive
+      - "{{ libvirt_host_share_effective_domain }}"
+  register: libvirt_host_share_config_dumpxml
+  changed_when: false
+
+- name: require shared memory backing to be enabled
+  ansible.builtin.assert:
+    that:
+      - "'<memoryBacking>' in libvirt_host_share_config_dumpxml.stdout"
+      - >-
+        (
+          "mode='shared'" in libvirt_host_share_config_dumpxml.stdout
+        ) or (
+          'mode="shared"' in libvirt_host_share_config_dumpxml.stdout
+        )
+    fail_msg: >-
+      Domain {{ libvirt_host_share_effective_domain }} does not have shared memory backing.
+      Set provider_options.memory_backing=memfd or shared for this host and recreate the VM.
+  when: libvirt_host_share_require_shared_memory_backing | bool
+
+- name: read current libvirt domain state
+  ansible.builtin.command:
+    argv:
+      - "{{ libvirt_host_share_virsh_bin }}"
+      - domstate
+      - "{{ libvirt_host_share_effective_domain }}"
+  register: libvirt_host_share_domstate
+  changed_when: false
+
+- name: render filesystem device XML for each host share
+  ansible.builtin.template:
+    src: filesystem.xml.j2
+    dest: "{{ libvirt_host_share_xml_dir }}/{{ inventory_hostname }}-{{ item.tag }}.xml"
+    mode: "0644"
+  loop: "{{ libvirt_host_share_list }}"
+  loop_control:
+    label: "{{ item.tag }}"
+
+- name: attach host shares to persistent config
+  ansible.builtin.command:
+    argv:
+      - "{{ libvirt_host_share_virsh_bin }}"
+      - attach-device
+      - "{{ libvirt_host_share_effective_domain }}"
+      - "{{ libvirt_host_share_xml_dir }}/{{ inventory_hostname }}-{{ item.tag }}.xml"
+      - --config
+  loop: "{{ libvirt_host_share_list }}"
+  loop_control:
+    label: "{{ item.tag }}"
+  register: libvirt_host_share_config_attach_results
+  changed_when: true
+  when: >-
+    ("<target dir='" ~ item.tag ~ "'/>") not in libvirt_host_share_config_dumpxml.stdout
+    and
+    ('<target dir="' ~ item.tag ~ '"/>') not in libvirt_host_share_config_dumpxml.stdout
+
+- name: attach host shares to running domain
+  ansible.builtin.command:
+    argv:
+      - "{{ libvirt_host_share_virsh_bin }}"
+      - attach-device
+      - "{{ libvirt_host_share_effective_domain }}"
+      - "{{ libvirt_host_share_xml_dir }}/{{ inventory_hostname }}-{{ item.tag }}.xml"
+      - --live
+  loop: "{{ libvirt_host_share_list }}"
+  loop_control:
+    label: "{{ item.tag }}"
+  register: libvirt_host_share_live_attach_results
+  changed_when: true
+  when:
+    - libvirt_host_share_attach_live_when_running | bool
+    - (libvirt_host_share_domstate.stdout | trim | lower) == 'running'
+    - >-
+      ("<target dir='" ~ item.tag ~ "'/>") not in libvirt_host_share_live_dumpxml.stdout
+      and
+      ('<target dir="' ~ item.tag ~ '"/>') not in libvirt_host_share_live_dumpxml.stdout
+
+- name: report already attached host shares
+  ansible.builtin.debug:
+    msg: "Host share {{ item.tag }} is already attached to {{ libvirt_host_share_effective_domain }}"
+  loop: "{{ libvirt_host_share_list }}"
+  loop_control:
+    label: "{{ item.tag }}"
+  when: >-
+    (
+      ("<target dir='" ~ item.tag ~ "'/>") in libvirt_host_share_config_dumpxml.stdout
+      or
+      ('<target dir="' ~ item.tag ~ '"/>') in libvirt_host_share_config_dumpxml.stdout
+    ) and
+    (
+      (
+        (libvirt_host_share_domstate.stdout | trim | lower) != 'running'
+      ) or (
+        not (libvirt_host_share_attach_live_when_running | bool)
+      ) or (
+        ("<target dir='" ~ item.tag ~ "'/>") in libvirt_host_share_live_dumpxml.stdout
+        or
+        ('<target dir="' ~ item.tag ~ '"/>') in libvirt_host_share_live_dumpxml.stdout
+      )
+    )

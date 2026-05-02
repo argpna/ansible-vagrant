@@ -1,0 +1,127 @@
+---
+- name: assert build-mode controller Python settings are valid
+  ansible.builtin.assert:
+    that:
+      - controller.python.source_version is defined
+      - controller.python.source_version is match('^[0-9]+\\.[0-9]+\\.[0-9]+$')
+    fail_msg: >-
+      controller.python.source_version must be defined as an x.y.z release.
+
+- name: install build prerequisites for controller Python on Debian-family hosts
+  ansible.builtin.apt:
+    name:
+      - build-essential
+      - gcc
+      - libbz2-dev
+      - libffi-dev
+      - libgdbm-dev
+      - liblzma-dev
+      - libncurses5-dev
+      - libnss3-dev
+      - libreadline-dev
+      - libsqlite3-dev
+      - libssl-dev
+      - tk-dev
+      - uuid-dev
+      - wget
+      - zlib1g-dev
+    state: present
+    update_cache: true
+  when: ansible_os_family == 'Debian'
+
+- name: install build prerequisites for controller Python on RedHat-family hosts
+  ansible.builtin.dnf:
+    name:
+      - bzip2-devel
+      - gcc
+      - libffi-devel
+      - libuuid-devel
+      - make
+      - ncurses-devel
+      - openssl-devel
+      - readline-devel
+      - sqlite-devel
+      - tk-devel
+      - wget
+      - xz-devel
+      - zlib-devel
+    state: present
+  when: ansible_os_family == 'RedHat'
+
+- name: derive the controller Python major/minor version
+  ansible.builtin.set_fact:
+    controller_python_version: "{{ controller.python.source_version.split('.')[0:2] | join('.') }}"
+
+- name: define controller Python source-build paths
+  ansible.builtin.set_fact:
+    controller_python_build_root: "/usr/local/src/controller-python-build"
+    controller_python_source_dir: "/usr/local/src/controller-python-build/Python-{{ controller.python.source_version }}"
+    controller_python_source_tarball: "/usr/local/src/controller-python-build/Python-{{ controller.python.source_version }}.tgz"
+    controller_python_executable: "/usr/local/bin/python{{ controller_python_version }}"
+
+- name: ensure the controller Python build root exists
+  ansible.builtin.file:
+    path: "{{ controller_python_build_root }}"
+    state: directory
+    mode: "0755"
+
+- name: check whether the controller Python executable already exists
+  ansible.builtin.stat:
+    path: "{{ controller_python_executable }}"
+  register: controller_python_executable_stat
+
+- name: read the installed controller Python version
+  ansible.builtin.command:
+    argv:
+      - "{{ controller_python_executable }}"
+      - -c
+      - "import sys; print(sys.version.split()[0])"
+  register: controller_python_installed_version
+  changed_when: false
+  when: controller_python_executable_stat.stat.exists
+
+- name: decide whether the controller Python runtime must be rebuilt
+  ansible.builtin.set_fact:
+    controller_python_rebuild_required: >-
+      {{ (not controller_python_executable_stat.stat.exists) or
+         (controller_python_installed_version.stdout != controller.python.source_version) }}
+
+- name: download the controller Python source tarball
+  ansible.builtin.get_url:
+    url: "https://www.python.org/ftp/python/{{ controller.python.source_version }}/Python-{{ controller.python.source_version }}.tgz"
+    dest: "{{ controller_python_source_tarball }}"
+    mode: "0644"
+
+- name: extract the controller Python source tarball
+  ansible.builtin.unarchive:
+    src: "{{ controller_python_source_tarball }}"
+    dest: "{{ controller_python_build_root }}"
+    remote_src: true
+    creates: "{{ controller_python_source_dir }}/configure"
+
+- name: configure the controller Python source build
+  ansible.builtin.command:
+    argv:
+      - ./configure
+      - --enable-optimizations
+  args:
+    chdir: "{{ controller_python_source_dir }}"
+    creates: "{{ controller_python_source_dir }}/Makefile"
+
+- name: compile the controller Python source build
+  ansible.builtin.command:
+    argv:
+      - make
+      - "-j{{ ansible_processor_vcpus | default(2) }}"
+  args:
+    chdir: "{{ controller_python_source_dir }}"
+    creates: "{{ controller_python_source_dir }}/python"
+
+- name: install the controller Python source build with altinstall
+  ansible.builtin.command:
+    argv:
+      - make
+      - altinstall
+  args:
+    chdir: "{{ controller_python_source_dir }}"
+  when: controller_python_rebuild_required

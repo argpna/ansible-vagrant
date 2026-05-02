@@ -1,0 +1,19 @@
+---
+- name: assert required AD CS inputs are present
+  ansible.builtin.assert:
+    that:
+      - domain.name is defined
+      - certificates.autoenroll_template is defined
+      - certificates.gpo_name is defined
+
+- name: install and configure the AD CS certificate authority
+  ansible.builtin.include_tasks: install_ca.yml
+
+- name: publish the machine certificate template
+  ansible.builtin.include_tasks: ensure_template.yml
+
+- name: configure the machine auto-enrollment GPO
+  ansible.builtin.include_tasks: ensure_gpo.yml
+
+- name: export the lab CA chain
+  ansible.builtin.include_tasks: export_chain.yml

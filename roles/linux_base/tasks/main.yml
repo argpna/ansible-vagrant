@@ -1,0 +1,32 @@
+---
+- name: install baseline linux packages
+  ansible.builtin.package:
+    name:
+      - vim
+      - git
+      - acl
+    state: present
+
+- name: create the controller admin group
+  ansible.builtin.group:
+    name: "{{ controller.admin_user.group }}"
+    state: present
+
+- name: create the controller admin user
+  ansible.builtin.user:
+    name: "{{ controller.admin_user.name }}"
+    password: "{{ controller.admin_user.password_hash }}"
+    group: "{{ controller.admin_user.group }}"
+    state: present
+
+- name: install the controller admin authorized key
+  ansible.posix.authorized_key:
+    user: "{{ controller.admin_user.name }}"
+    key: "{{ controller.admin_user.authorized_key }}"
+
+- name: grant passwordless sudo to the controller admin group
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/{{ controller.admin_user.group }}"
+    content: "%{{ controller.admin_user.group }} ALL=(ALL) NOPASSWD:ALL\n"
+    mode: "0440"
+    validate: "/usr/sbin/visudo -cf %s"

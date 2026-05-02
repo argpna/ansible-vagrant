@@ -1,0 +1,6 @@
+---
+- name: manage SQL Server service accounts
+  ansible.builtin.import_tasks: service_accounts.yml
+
+- name: install SQL Server
+  ansible.builtin.import_tasks: install.yml

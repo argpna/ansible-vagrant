@@ -1,0 +1,113 @@
+---
+- name: resolve configured lab network profiles
+  ansible.builtin.set_fact:
+    libvirt_host_network_profiles: "{{ network_profiles | default({}) }}"
+
+- name: resolve selected lab network profile
+  ansible.builtin.set_fact:
+    libvirt_host_network_selected_profile: "{{ libvirt_host_network_profiles[libvirt_host_network_profile] | default({}) }}"
+
+- name: require selected lab network profile to exist
+  ansible.builtin.assert:
+    that:
+      - libvirt_host_network_selected_profile | length > 0
+    fail_msg: >-
+      NETWORK_PROFILE={{ libvirt_host_network_profile }} is not defined in
+      network_profiles.
+
+- name: require selected profile network names to exist
+  ansible.builtin.assert:
+    that:
+      - item in networks
+    fail_msg: >-
+      NETWORK_PROFILE={{ libvirt_host_network_profile }} references unknown
+      networks item {{ item }}.
+  loop: "{{ libvirt_host_network_selected_profile.networks | default([]) }}"
+  when: networks is defined
+
+- name: derive managed networks from lab network inventory
+  ansible.builtin.set_fact:
+    libvirt_host_network_effective_networks: "{{ libvirt_host_network_effective_networks | default([]) + [network_record] }}"
+  vars:
+    network_name: "{{ item }}"
+    network_config: "{{ networks[network_name] }}"
+    network_record:
+      name: "{{ network_name }}"
+      xml_path: "{{ network_config.xml_path | default(libvirt_host_network_generated_dir ~ '/' ~ network_name ~ '.xml') }}"
+      cidr: "{{ network_config.cidr }}"
+      bridge_name: "{{ network_config.bridge_name }}"
+      gateway: "{{ network_config.gateway }}"
+      netmask: "{{ network_config.netmask }}"
+      dhcp_range: "{{ network_config.dhcp_range | default({}) }}"
+      forward_mode: "{{ network_config.forward_mode | default('route') }}"
+  loop: "{{ libvirt_host_network_selected_profile.networks | default([]) }}"
+  loop_control:
+    label: "{{ item }}"
+  when: networks is defined
+
+- name: derive managed networks from explicit role variables
+  ansible.builtin.set_fact:
+    libvirt_host_network_effective_networks: "{{ libvirt_host_network_explicit_networks }}"
+  vars:
+    libvirt_host_network_explicit_networks: >-
+      {{
+        (libvirt_host_networks | default([]) | length > 0)
+        | ternary(
+            libvirt_host_networks,
+            [
+              {
+                'name': libvirt_host_network_name,
+                'xml_path': libvirt_host_network_xml_path,
+                'cidr': libvirt_host_network_cidr,
+                'bridge_name': libvirt_host_network_bridge_name
+              }
+            ]
+          )
+      }}
+  when: libvirt_host_network_effective_networks | default([]) | length == 0
+
+- name: require managed libvirt networks to define required fields
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name | length > 0
+      - item.xml_path is defined
+      - item.xml_path | length > 0
+      - item.cidr is defined
+      - item.cidr | length > 0
+      - item.bridge_name is defined
+      - item.bridge_name | length > 0
+      - not (libvirt_host_network_generate_xml | bool) or item.gateway is defined
+      - not (libvirt_host_network_generate_xml | bool) or item.gateway | default('') | length > 0
+      - not (libvirt_host_network_generate_xml | bool) or item.netmask is defined
+      - not (libvirt_host_network_generate_xml | bool) or item.netmask | default('') | length > 0
+    fail_msg: >-
+      Each managed libvirt network must define name, xml_path, cidr,
+      bridge_name, gateway, and netmask. Invalid item: {{ item }}
+  loop: "{{ libvirt_host_network_effective_networks }}"
+  loop_control:
+    label: "{{ item.name | default('unknown') }}"
+
+- name: derive host firewall and outbound NAT policy
+  ansible.builtin.set_fact:
+    libvirt_host_network_effective_manage_firewalld: >-
+      {{
+        (libvirt_host_network_selected_profile | default({})).manage_firewalld
+        | default(libvirt_host_network_manage_firewalld)
+        | bool
+      }}
+    libvirt_host_network_effective_outbound_nat: >-
+      {{
+        (libvirt_host_network_selected_profile | default({})).outbound_nat
+        | default(libvirt_host_network_outbound_nat)
+        | bool
+      }}
+
+- name: derive networks that need scoped outbound NAT
+  ansible.builtin.set_fact:
+    libvirt_host_network_scoped_nat_networks: >-
+      {{
+        libvirt_host_network_effective_networks
+        | selectattr('forward_mode', 'equalto', 'route')
+        | list
+      }}

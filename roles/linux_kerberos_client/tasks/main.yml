@@ -1,0 +1,64 @@
+---
+- name: assert required kerberos and dns settings are present
+  ansible.builtin.assert:
+    that:
+      - kerberos.realm is defined
+      - kerberos.kdc_host is defined
+      - kerberos.kdc_ip is defined
+      - dns.mode is defined
+
+- name: install kerberos client packages for dnf platforms
+  ansible.builtin.dnf:
+    name:
+      - krb5-devel
+      - krb5-workstation
+      - dnsmasq
+    state: present
+  when: ansible_pkg_mgr == 'dnf'
+
+- name: install kerberos client packages for apt platforms
+  ansible.builtin.apt:
+    name:
+      - libkrb5-dev
+      - krb5-user
+      - dnsmasq
+    update_cache: true
+    state: present
+  when: ansible_pkg_mgr == 'apt'
+
+- name: ensure the controller can resolve the KDC hostname locally
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: "^{{ kerberos.kdc_ip | regex_escape() }}\\s+{{ kerberos.kdc_host }}\\."
+    line: "{{ kerberos.kdc_ip }}  {{ kerberos.kdc_host }}.{{ kerberos.realm | lower }} {{ kerberos.kdc_host }}"
+
+- name: configure dnsmasq as a local AD forwarder
+  ansible.builtin.copy:
+    dest: /etc/dnsmasq.conf
+    mode: "0644"
+    content: |
+      server=/{{ domain.name }}/{{ dns.upstream_server }}
+      listen-address=127.0.0.1
+      domain-needed
+      bind-interfaces
+  notify: restart dnsmasq
+  when: dns.mode == 'local_forwarder'
+
+- name: point dhclient to the local dnsmasq resolver on dnf platforms
+  ansible.builtin.copy:
+    dest: /etc/dhcp/dhclient.conf
+    content: prepend domain-name-servers 127.0.0.1;
+    mode: "0644"
+  notify: restart NetworkManager
+  when:
+    - dns.mode == 'local_forwarder'
+    - ansible_pkg_mgr == 'dnf'
+
+- name: flush kerberos dns handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: render krb5.conf for the lab realm
+  ansible.builtin.template:
+    src: krb5.conf.j2
+    dest: /etc/krb5.conf
+    mode: "0644"

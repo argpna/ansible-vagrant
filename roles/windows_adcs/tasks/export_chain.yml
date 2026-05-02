@@ -1,0 +1,15 @@
+---
+- name: get the CA certificate details
+  win_adcs_ca_info:
+  register: windows_adcs_ca_info
+
+- name: expose the CA certificate subject
+  ansible.builtin.set_fact:
+    windows_adcs_ca_subject: "{{ windows_adcs_ca_info.subject }}"
+
+- name: expose the PEM-encoded CA chain
+  ansible.builtin.set_fact:
+    windows_adcs_ca_chain_pem: |
+      -----BEGIN CERTIFICATE-----
+      {{ windows_adcs_ca_info.pem_body }}
+      -----END CERTIFICATE-----

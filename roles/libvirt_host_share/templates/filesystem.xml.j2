@@ -1,0 +1,8 @@
+<filesystem type='mount' accessmode='passthrough'>
+  <driver type='virtiofs'/>
+  <source dir='{{ item.source }}'/>
+  <target dir='{{ item.tag }}'/>
+{% if item.readonly | default(false) %}
+  <readonly/>
+{% endif %}
+</filesystem>

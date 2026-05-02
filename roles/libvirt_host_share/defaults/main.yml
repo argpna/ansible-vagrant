@@ -1,0 +1,7 @@
+---
+libvirt_host_share_virsh_bin: virsh
+libvirt_host_share_vagrant_id_file: "{{ playbook_dir }}/../.vagrant/machines/{{ inventory_hostname }}/libvirt/id"
+libvirt_host_share_domain_name: ""
+libvirt_host_share_attach_live_when_running: true
+libvirt_host_share_require_shared_memory_backing: true
+libvirt_host_share_xml_dir: /tmp/libvirt-host-share

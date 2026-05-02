@@ -1,0 +1,34 @@
+---
+windows_sql_server:
+  state: present
+  media_path: null
+  instance_name: MSSQLSERVER
+  features:
+    - SQLEngine
+  service_accounts:
+    manage: false
+    sqlsvc:
+      sam_account_name: sqlsvc
+      password: VagrantPass1!
+      description: SQL Server Database Engine service account
+    agtsvc:
+      sam_account_name: sqlagent
+      password: VagrantPass1!
+      description: SQL Server Agent service account
+  sqlsysadminaccounts:
+    - "{{ domain.netbios_name }}\\{{ domain.admin.username }}"
+  security_mode: Windows
+  sa_password: null
+  browser_startup_type: Disabled
+  update_enabled: false
+  update_source: null
+  product_key: null
+  install_shared_dir: null
+  install_shared_wow_dir: null
+  instance_dir: null
+  install_sql_data_dir: null
+  sql_user_db_dir: null
+  sql_user_db_log_dir: null
+  sql_temp_db_dir: null
+  sql_temp_db_log_dir: null
+  reboot_if_required: true

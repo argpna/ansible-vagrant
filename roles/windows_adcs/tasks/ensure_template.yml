@@ -1,0 +1,32 @@
+---
+- name: manage the machine auto-enrollment certificate template
+  become: true
+  become_method: ansible.builtin.runas
+  vars:
+    ansible_become_user: "{{ windows_adcs_become_user }}"
+    ansible_become_password: "{{ windows_adcs_become_password }}"
+  block:
+    - name: import the machine auto-enrollment certificate template
+      win_adcs_template:
+        templates: '{{ lookup("template", "adcs_template.xml.j2") }}'
+        dacl: "{{ windows_adcs_template_dacl }}"
+        owner: Enterprise Admins
+        group: Enterprise Admins
+
+    - name: check if the template has already been published on the CA
+      ansible.windows.win_powershell:
+        script: |
+          $ErrorActionPreference = 'Stop'
+          $name = '{{ certificates.autoenroll_template | quote }}'
+          if (Get-CATemplate | Where-Object { $_.Name -eq $name } | Select-Object -First 1) { 'true' } else { 'false' }
+      register: windows_adcs_template_in_ca
+      changed_when: false
+
+    - name: publish the imported certificate template on the CA
+      ansible.windows.win_powershell:
+        script: |
+          $ErrorActionPreference = 'Stop'
+          $name = '{{ certificates.autoenroll_template | quote }}'
+          Add-CATemplate -Name $name -Force
+          Write-Output "CA template added: $name"
+      when: not (windows_adcs_template_in_ca.output[0] | bool)

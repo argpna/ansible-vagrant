@@ -1,0 +1,82 @@
+---
+- name: Install WinFSP
+  ansible.windows.win_package:
+    path: "{{ windows_guest_tools_winfsp_url }}"
+    provider: msi
+    state: present
+  when: windows_extras.guest_tools.winfsp_enabled | bool
+
+- name: Check whether the VirtioFS service already exists
+  ansible.windows.win_service_info:
+    name: VirtioFsSvc
+  register: windows_guest_tools_virtiofs
+  changed_when: false
+  when: windows_extras.guest_tools.virtio_enabled | bool
+
+- name: Install virtio guest tools
+  when:
+    - windows_extras.guest_tools.virtio_enabled | bool
+    - not (windows_guest_tools_virtiofs.exists | default(false))
+  block:
+    - name: Ensure temp directory exists
+      ansible.windows.win_file:
+        path: "{{ windows_guest_tools_temp_dir }}"
+        state: directory
+
+    - name: Download virtio-win-guest-tools installer
+      ansible.windows.win_get_url:
+        url: "{{ windows_guest_tools_url }}"
+        dest: "{{ windows_guest_tools_local_path }}"
+        force: false
+
+    - name: Create scheduled task for silent virtio install
+      community.windows.win_scheduled_task:
+        name: "{{ windows_guest_tools_task_name }}"
+        description: Install virtio-win guest tools silently
+        username: SYSTEM
+        run_level: highest
+        enabled: true
+        execution_time_limit: PT30M
+        actions:
+          - path: "{{ windows_guest_tools_local_path }}"
+            arguments: /S
+        triggers:
+          - type: registration
+        state: present
+
+    - name: Wait for WinRM to return
+      ansible.builtin.wait_for_connection:
+        delay: 5
+        timeout: 300
+
+    - name: Wait for virtio scheduled task to complete
+      community.windows.win_scheduled_task_stat:
+        name: "{{ windows_guest_tools_task_name }}"
+      register: windows_guest_tools_task_stat
+      retries: 30
+      delay: 10
+      until: >-
+        (windows_guest_tools_task_stat.task_exists is defined and
+          not windows_guest_tools_task_stat.task_exists) or
+        (windows_guest_tools_task_stat.state is defined and
+          windows_guest_tools_task_stat.state.status != 'TASK_STATE_RUNNING')
+      changed_when: false
+
+  always:
+    - name: Remove scheduled task
+      community.windows.win_scheduled_task:
+        name: "{{ windows_guest_tools_task_name }}"
+        state: absent
+      ignore_errors: true
+
+    - name: Remove temp directory
+      ansible.windows.win_file:
+        path: "{{ windows_guest_tools_temp_dir }}"
+        state: absent
+
+- name: Configure virtiofs tag-to-drive mounts
+  ansible.builtin.import_tasks: virtiofs_mounts.yml
+  when:
+    - windows_extras.guest_tools.winfsp_enabled | bool
+    - windows_extras.guest_tools.virtio_enabled | bool
+    - windows_extras.host_shares | default([]) | length > 0

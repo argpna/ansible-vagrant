@@ -1,0 +1,83 @@
+---
+- name: assert required winrm certificate inputs are present
+  ansible.builtin.assert:
+    that:
+      - domain.name is defined
+      - domain.controller_host is defined
+
+- name: refresh group policy so the latest certificates are available
+  ansible.windows.win_command: gpupdate /force
+
+- name: trigger machine certificate auto-enrollment
+  ansible.windows.win_command: certutil.exe -pulse
+  become: true
+  become_user: SYSTEM
+  become_method: ansible.builtin.runas
+
+- name: wait briefly for certificate enrollment to settle
+  ansible.builtin.pause:
+    seconds: 5
+
+- name: derive the AD CS certificate selectors used for WinRM
+  ansible.builtin.set_fact:
+    windows_winrm_cert_issuer: "{{ hostvars[domain.controller_host].windows_adcs_ca_subject | default('') }}"
+    windows_winrm_cert_dns_name: "{{ inventory_hostname }}.{{ domain.name }}"
+
+- name: locate the enrolled certificate thumbprint for WinRM
+  win_adcs_enrolled_cert:
+    issuer: "{{ windows_winrm_cert_issuer }}"
+    dns_name: "{{ windows_winrm_cert_dns_name }}"
+    require_client_auth: "{{ windows_is_domain_controller | default(false) | bool }}"
+    require_server_auth: "{{ windows_is_domain_controller | default(false) | bool }}"
+    exclude_kdc_auth: "{{ windows_is_domain_controller | default(false) | bool }}"
+  register: windows_winrm_enrolled_cert
+  retries: 6
+  delay: 10
+  until: (windows_winrm_enrolled_cert.thumbprint | default('')) | length > 0
+
+- name: fail when no enrolled certificate was found for WinRM binding
+  ansible.builtin.fail:
+    msg: >-
+      Failed to find an enrolled certificate for {{ windows_winrm_cert_dns_name }}
+      {% if windows_winrm_cert_issuer | length > 0 %}issued by {{ windows_winrm_cert_issuer }} {% endif %}
+      on {{ inventory_hostname }}
+  when: (windows_winrm_enrolled_cert.thumbprint | default('')) | length == 0
+
+- name: inspect the current HTTPS listener
+  win_winrm_listener_info:
+  register: windows_winrm_listener
+
+- name: reconfigure the WinRM HTTPS listener when the certificate changed
+  when: not (windows_winrm_listener.exists | default(false)) or
+        windows_winrm_listener.certificate_thumbprint != windows_winrm_enrolled_cert.thumbprint
+  block:
+    - name: stage the WinRM HTTPS listener update script
+      ansible.windows.win_copy:
+        src: set_winrm_https_listener.ps1
+        dest: C:\Windows\Temp\set-winrm-https-listener.ps1
+
+    - name: replace the WinRM HTTPS listener certificate
+      ansible.windows.win_command: >-
+        powershell.exe -NoProfile -ExecutionPolicy Bypass
+        -File C:\Windows\Temp\set-winrm-https-listener.ps1
+        -CertificateThumbprint {{ windows_winrm_enrolled_cert.thumbprint }}
+      register: windows_winrm_listener_async
+      async: 30
+      poll: 0
+
+    - name: pause briefly for the listener replacement to settle
+      ansible.builtin.pause:
+        seconds: 5
+
+    - name: verify the listener replacement completed
+      ansible.builtin.async_status:
+        jid: "{{ windows_winrm_listener_async.ansible_job_id }}"
+      register: windows_winrm_async_status
+      until: windows_winrm_async_status.finished
+      retries: 10
+      delay: 3
+
+    - name: remove the staged WinRM HTTPS listener update script
+      ansible.windows.win_file:
+        path: C:\Windows\Temp\set-winrm-https-listener.ps1
+        state: absent

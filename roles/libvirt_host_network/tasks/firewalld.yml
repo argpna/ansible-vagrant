@@ -1,0 +1,88 @@
+---
+- name: check whether firewall-cmd is available
+  ansible.builtin.command:
+    argv:
+      - /bin/sh
+      - -c
+      - command -v firewall-cmd
+  register: libvirt_host_network_firewalld_command
+  failed_when: false
+  changed_when: false
+
+- name: install firewalld when requested
+  ansible.builtin.package:
+    name: "{{ libvirt_host_network_firewalld_package }}"
+    state: present
+  when:
+    - libvirt_host_network_firewalld_install | bool
+    - libvirt_host_network_firewalld_command.rc != 0
+
+- name: recheck whether firewall-cmd is available
+  ansible.builtin.command:
+    argv:
+      - /bin/sh
+      - -c
+      - command -v firewall-cmd
+  register: libvirt_host_network_firewalld_recheck
+  failed_when: false
+  changed_when: false
+  when: libvirt_host_network_firewalld_install | bool
+
+- name: record firewalld command availability
+  ansible.builtin.set_fact:
+    libvirt_host_network_firewalld_available: >-
+      {{
+        (
+          libvirt_host_network_firewalld_recheck.rc
+          | default(libvirt_host_network_firewalld_command.rc | default(1))
+        ) == 0
+      }}
+
+- name: start firewalld
+  ansible.builtin.service:
+    name: "{{ libvirt_host_network_firewalld_service }}"
+    state: started
+    enabled: true
+  when:
+    - libvirt_host_network_firewalld_start | bool
+    - libvirt_host_network_firewalld_available | bool
+
+- name: fail when firewalld is unavailable
+  ansible.builtin.fail:
+    msg: >-
+      firewall-cmd is not available. Install/start firewalld, set
+      libvirt_host_network_firewalld_install=true, or disable firewalld
+      management with libvirt_host_network_manage_firewalld=false.
+  when:
+    - libvirt_host_network_firewalld_fail_if_unavailable | bool
+    - not libvirt_host_network_firewalld_available | bool
+
+- name: inspect firewalld state
+  ansible.builtin.command:
+    argv:
+      - firewall-cmd
+      - --state
+  register: libvirt_host_network_firewalld_state
+  failed_when: false
+  changed_when: false
+  when: libvirt_host_network_firewalld_available | bool
+
+- name: note when firewalld management is skipped
+  ansible.builtin.debug:
+    msg: >-
+      firewalld is not available or not running; skipping firewalld zone
+      management. Scoped outbound NAT is still managed separately by nftables.
+  when: >-
+    not (libvirt_host_network_firewalld_available | bool) or
+    (libvirt_host_network_firewalld_state.rc | default(1)) != 0
+
+- name: manage firewalld masquerade for the libvirt zone
+  ansible.posix.firewalld:
+    zone: "{{ libvirt_host_network_firewalld_zone }}"
+    masquerade: "{{ libvirt_host_network_firewalld_masquerade | bool }}"
+    state: "{{ (libvirt_host_network_firewalld_masquerade | bool) | ternary('enabled', 'disabled') }}"
+    permanent: true
+    immediate: true
+  when:
+    - libvirt_host_network_firewalld_available | bool
+    - libvirt_host_network_firewalld_state.rc == 0

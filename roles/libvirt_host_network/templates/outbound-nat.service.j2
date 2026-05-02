@@ -1,0 +1,13 @@
+[Unit]
+Description=Scoped outbound NAT for libvirt lab networks
+After=network-online.target firewalld.service libvirtd.service virtqemud.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sh -c '{{ libvirt_host_network_nft_bin }} list table ip {{ libvirt_host_network_outbound_nat_table }} >/dev/null 2>&1 && {{ libvirt_host_network_nft_bin }} delete table ip {{ libvirt_host_network_outbound_nat_table }} || true'
+ExecStart={{ libvirt_host_network_nft_bin }} -f {{ libvirt_host_network_outbound_nat_rules_path }}
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

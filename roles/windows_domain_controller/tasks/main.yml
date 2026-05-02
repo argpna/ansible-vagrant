@@ -1,0 +1,48 @@
+---
+- name: assert required domain controller settings are present
+  ansible.builtin.assert:
+    that:
+      - windows_connection_adapter_name is defined
+      - domain.name is defined
+      - domain.safe_mode_password is defined
+      - domain.admin.username is defined
+      - domain.admin.password is defined
+
+- name: point the controller adapter DNS at localhost
+  ansible.windows.win_dns_client:
+    adapter_name: "{{ windows_connection_adapter_name }}"
+    ipv4_addresses: 127.0.0.1
+
+- name: promote the host to a domain controller
+  microsoft.ad.domain:
+    dns_domain_name: "{{ domain.name }}"
+    safe_mode_password: "{{ domain.safe_mode_password }}"
+  register: windows_domain_controller_promotion
+
+- name: reboot after domain controller promotion when required
+  ansible.windows.win_reboot:
+  when: windows_domain_controller_promotion.reboot_required
+
+- name: create the initial domain admin account
+  microsoft.ad.user:
+    name: "{{ domain.admin.username }}"
+    upn: "{{ domain.admin.upn }}"
+    description: "{{ domain.admin.username }} Domain Account"
+    password: "{{ domain.admin.password }}"
+    password_never_expires: true
+    groups:
+      set:
+        - Domain Admins
+    state: present
+  register: windows_domain_controller_admin_user
+  retries: 30
+  delay: 15
+  until: windows_domain_controller_admin_user is successful
+
+- name: validate the initial domain admin account
+  ansible.windows.win_whoami:
+  become: true
+  become_method: ansible.builtin.runas
+  vars:
+    ansible_become_user: "{{ domain.admin.upn }}"
+    ansible_become_password: "{{ domain.admin.password }}"

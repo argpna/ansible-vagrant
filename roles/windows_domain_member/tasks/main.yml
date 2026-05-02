@@ -1,0 +1,34 @@
+---
+- name: assert required domain member settings are present
+  ansible.builtin.assert:
+    that:
+      - windows_connection_adapter_name is defined
+      - domain.controller_ip is defined
+      - domain.name is defined
+      - domain.admin.upn is defined
+      - domain.admin.password is defined
+
+- name: point the member adapter DNS at the domain controller
+  ansible.windows.win_dns_client:
+    adapter_names: "{{ windows_connection_adapter_name }}"
+    ipv4_addresses: "{{ domain.controller_ip }}"
+
+- name: join the host to the domain
+  microsoft.ad.membership:
+    dns_domain_name: "{{ domain.name }}"
+    domain_admin_user: "{{ domain.admin.upn }}"
+    domain_admin_password: "{{ domain.admin.password }}"
+    state: domain
+  register: windows_domain_member_join
+
+- name: reboot after domain join when required
+  ansible.windows.win_reboot:
+  when: windows_domain_member_join.reboot_required
+
+- name: validate the domain admin identity on the joined host
+  ansible.windows.win_whoami:
+  become: true
+  become_method: ansible.builtin.runas
+  vars:
+    ansible_become_user: "{{ domain.admin.upn }}"
+    ansible_become_password: "{{ domain.admin.password }}"

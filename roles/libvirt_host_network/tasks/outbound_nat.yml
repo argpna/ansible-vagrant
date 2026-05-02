@@ -1,0 +1,110 @@
+---
+- name: locate nft when scoped outbound NAT is enabled
+  ansible.builtin.command:
+    argv:
+      - /bin/sh
+      - -c
+      - command -v nft
+  register: libvirt_host_network_nft_command
+  failed_when: false
+  changed_when: false
+  when:
+    - libvirt_host_network_state == 'present'
+    - libvirt_host_network_effective_outbound_nat | bool
+
+- name: require nft to be installed when scoped outbound NAT is enabled
+  ansible.builtin.assert:
+    that:
+      - libvirt_host_network_nft_command.rc == 0
+    fail_msg: >-
+      nft is required when scoped outbound NAT is enabled by the selected lab
+      network topology.
+  when:
+    - libvirt_host_network_state == 'present'
+    - libvirt_host_network_effective_outbound_nat | bool
+
+- name: require at least one routed network when scoped outbound NAT is enabled
+  ansible.builtin.assert:
+    that:
+      - libvirt_host_network_scoped_nat_networks | default([]) | length > 0
+    fail_msg: >-
+      Scoped outbound NAT is enabled, but no selected lab networks use
+      forward_mode=route.
+  when:
+    - libvirt_host_network_state == 'present'
+    - libvirt_host_network_effective_outbound_nat | bool
+
+- name: remember nft command path
+  ansible.builtin.set_fact:
+    libvirt_host_network_nft_bin: "{{ libvirt_host_network_nft_command.stdout }}"
+  when:
+    - libvirt_host_network_state == 'present'
+    - libvirt_host_network_effective_outbound_nat | bool
+
+- name: enable IPv4 forwarding for scoped outbound NAT
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    sysctl_file: "{{ libvirt_host_network_ip_forward_sysctl_file }}"
+    sysctl_set: true
+    state: present
+    reload: true
+  when:
+    - libvirt_host_network_state == 'present'
+    - libvirt_host_network_effective_outbound_nat | bool
+    - libvirt_host_network_enable_ipv4_forwarding | bool
+
+- name: ensure nftables configuration directory exists
+  ansible.builtin.file:
+    path: "{{ libvirt_host_network_outbound_nat_rules_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - libvirt_host_network_state == 'present'
+    - libvirt_host_network_effective_outbound_nat | bool
+
+- name: install scoped outbound NAT nftables rules
+  ansible.builtin.template:
+    src: outbound-nat.nft.j2
+    dest: "{{ libvirt_host_network_outbound_nat_rules_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: libvirt_host_network_outbound_nat_rules
+  when:
+    - libvirt_host_network_state == 'present'
+    - libvirt_host_network_effective_outbound_nat | bool
+
+- name: install scoped outbound NAT systemd unit
+  ansible.builtin.template:
+    src: outbound-nat.service.j2
+    dest: "/etc/systemd/system/{{ libvirt_host_network_outbound_nat_service }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  register: libvirt_host_network_outbound_nat_unit
+  when:
+    - libvirt_host_network_state == 'present'
+    - libvirt_host_network_effective_outbound_nat | bool
+
+- name: enable and apply scoped outbound NAT
+  ansible.builtin.systemd:
+    name: "{{ libvirt_host_network_outbound_nat_service }}.service"
+    enabled: true
+    state: restarted
+    daemon_reload: "{{ libvirt_host_network_outbound_nat_unit.changed }}"
+  when:
+    - libvirt_host_network_state == 'present'
+    - libvirt_host_network_effective_outbound_nat | bool
+
+- name: disable scoped outbound NAT service when not desired
+  ansible.builtin.systemd:
+    name: "{{ libvirt_host_network_outbound_nat_service }}.service"
+    enabled: false
+    state: stopped
+    daemon_reload: true
+  failed_when: false
+  when:
+    - libvirt_host_network_state in ['absent', 'purged'] or not libvirt_host_network_effective_outbound_nat | bool

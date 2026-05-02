@@ -1,0 +1,31 @@
+---
+- name: manage the auto-enrollment GPO
+  become: true
+  become_method: ansible.builtin.runas
+  vars:
+    ansible_become_user: "{{ windows_adcs_become_user }}"
+    ansible_become_password: "{{ windows_adcs_become_password }}"
+  block:
+    - name: get policy server ID
+      ansible.windows.win_powershell:
+        script: |
+          $ErrorActionPreference = 'Stop'
+          (Get-CertificateEnrollmentPolicyServer -Scope All -Context Machine).Id
+      register: windows_adcs_policy_id
+      changed_when: false
+
+    - name: stage the auto-enrollment GPO backup
+      ansible.windows.win_copy:
+        src: gpo_backup/
+        dest: C:\temp\{{ certificates.gpo_name }}-backup\
+
+    - name: import, patch, and link the auto-enrollment GPO
+      win_adcs_autoenroll_gpo:
+        gpo_name: "{{ certificates.gpo_name }}"
+        backup_path: C:\temp\{{ certificates.gpo_name }}-backup
+        policy_server_id: "{{ windows_adcs_policy_id.output[0] }}"
+
+    - name: remove the staged auto-enrollment GPO backup
+      ansible.windows.win_file:
+        path: C:\temp\{{ certificates.gpo_name }}-backup
+        state: absent

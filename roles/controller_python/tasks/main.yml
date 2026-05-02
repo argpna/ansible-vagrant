@@ -1,0 +1,68 @@
+---
+- name: assert controller Python settings are valid
+  ansible.builtin.assert:
+    that:
+      - controller.python.source_version is defined
+      - controller.python.venv_path is defined
+    fail_msg: >-
+      controller.python must define source_version and venv_path.
+
+- name: install controller Python from source
+  ansible.builtin.include_tasks: build.yml
+
+- name: create the controller virtualenv parent directory
+  ansible.builtin.file:
+    path: "{{ controller.python.venv_path | dirname }}"
+    state: directory
+    owner: "{{ controller.admin_user.name }}"
+    group: "{{ controller.admin_user.group }}"
+    mode: "0755"
+
+- name: check whether the controller virtualenv already exists
+  ansible.builtin.stat:
+    path: "{{ controller.python.venv_path }}/bin/python"
+  register: controller_python_venv_stat
+
+- name: read the controller virtualenv Python version
+  ansible.builtin.command:
+    argv:
+      - "{{ controller.python.venv_path }}/bin/python"
+      - -c
+      - "import sys; print(sys.version.split()[0])"
+  register: controller_python_venv_version
+  changed_when: false
+  become: true
+  become_user: "{{ controller.admin_user.name }}"
+  when: controller_python_venv_stat.stat.exists
+
+- name: remove the controller virtualenv when its Python version is outdated
+  ansible.builtin.file:
+    path: "{{ controller.python.venv_path }}"
+    state: absent
+  when:
+    - controller_python_venv_stat.stat.exists
+    - controller_python_venv_version.stdout != controller.python.source_version
+
+- name: create the controller virtualenv
+  ansible.builtin.command:
+    cmd: "{{ controller_python_executable }} -m venv {{ controller.python.venv_path }}"
+    creates: "{{ controller.python.venv_path }}/bin/python"
+  become: true
+  become_user: "{{ controller.admin_user.name }}"
+
+- name: validate the controller Python interpreter version
+  ansible.builtin.command:
+    argv:
+      - "{{ controller_python_executable }}"
+      - -c
+      - "import sys; print(sys.version.split()[0])"
+  register: controller_python_version_check
+  changed_when: false
+
+- name: fail when the controller Python interpreter does not match the configured version
+  ansible.builtin.assert:
+    that:
+      - controller_python_version_check.stdout == controller.python.source_version
+    fail_msg: >-
+      Controller Python executable {{ controller_python_executable }} resolved to
+      {{ controller_python_version_check.stdout }}, expected {{ controller.python.source_version }}.

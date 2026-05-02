@@ -1,0 +1,92 @@
+---
+windows_adcs_become_user: "{{ domain.admin.upn }}"
+windows_adcs_become_password: "{{ domain.admin.password }}"
+
+windows_adcs_template_dacl:
+  - user: Authenticated Users
+    rights:
+      - list_child
+      - read_prop
+      - list_object
+      - read_control
+    qualifier: AccessAllowed
+  - user: Domain Computers
+    rights:
+      - list_child
+      - read_prop
+      - read_control
+    qualifier: AccessAllowed
+  - user: Domain Controllers
+    rights:
+      - list_child
+      - read_prop
+      - read_control
+    qualifier: AccessAllowed
+  - user: Domain Admins
+    rights:
+      - create_child
+      - delete_child
+      - list_child
+      - self_write
+      - read_prop
+      - write_prop
+      - delete_tree
+      - list_object
+      - delete
+      - read_control
+      - write_dac
+      - write_owner
+    qualifier: AccessAllowed
+  - user: Enterprise Admins
+    rights:
+      - create_child
+      - delete_child
+      - list_child
+      - self_write
+      - read_prop
+      - write_prop
+      - delete_tree
+      - list_object
+      - delete
+      - read_control
+      - write_dac
+      - write_owner
+    qualifier: AccessAllowed
+  - user: Domain Computers
+    rights:
+      - control_access
+    type: auto_enroll
+    qualifier: AccessAllowed
+  - user: Domain Controllers
+    rights:
+      - control_access
+    type: auto_enroll
+    qualifier: AccessAllowed
+  - user: Domain Computers
+    rights:
+      - read_prop
+      - write_prop
+      - control_access
+    type: enroll
+    qualifier: AccessAllowed
+  - user: Domain Controllers
+    rights:
+      - read_prop
+      - write_prop
+      - control_access
+    type: enroll
+    qualifier: AccessAllowed
+  - user: Domain Admins
+    rights:
+      - read_prop
+      - write_prop
+      - control_access
+    type: enroll
+    qualifier: AccessAllowed
+  - user: Enterprise Admins
+    rights:
+      - read_prop
+      - write_prop
+      - control_access
+    type: enroll
+    qualifier: AccessAllowed

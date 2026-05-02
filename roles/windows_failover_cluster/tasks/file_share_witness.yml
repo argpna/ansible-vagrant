@@ -1,0 +1,68 @@
+---
+- name: assert required witness settings are present
+  ansible.builtin.assert:
+    that:
+      - mssql.cluster.witness.type == 'file_share'
+      - mssql.cluster.witness.share_name is defined
+      - mssql.cluster.witness.directory is defined
+      - mssql.cluster.witness.path is defined
+    fail_msg: >-
+      mssql.cluster.witness must define a file-share witness with share_name,
+      directory, and path.
+
+- name: create the witness directory
+  ansible.windows.win_file:
+    path: "{{ mssql.cluster.witness.directory }}"
+    state: directory
+  when: (windows_failover_cluster_witness_share_state | default('present')) == 'present'
+
+- name: grant Domain Computers modify access to the witness directory
+  ansible.windows.win_acl:
+    path: "{{ mssql.cluster.witness.directory }}"
+    user: "{{ domain.netbios_name }}\\Domain Computers"
+    rights: Modify
+    type: allow
+    state: present
+    inherit: ContainerInherit,ObjectInherit
+    propagation: None
+  when: (windows_failover_cluster_witness_share_state | default('present')) == 'present'
+
+- name: create the witness SMB share
+  ansible.windows.win_share:
+    name: "{{ mssql.cluster.witness.share_name }}"
+    path: "{{ mssql.cluster.witness.directory }}"
+    description: "WSFC witness share for {{ mssql.cluster.name }}"
+    full: Administrators
+    change: "{{ domain.netbios_name }}\\Domain Computers"
+    read: Authenticated Users
+    caching_mode: None
+    state: "{{ windows_failover_cluster_witness_share_state | default('present') }}"
+
+- name: verify the witness share exists
+  ansible.windows.win_powershell:
+    script: |
+      $ErrorActionPreference = 'Stop'
+
+      $share = Get-SmbShare -Name '{{ mssql.cluster.witness.share_name }}' -ErrorAction Stop
+      [pscustomobject]@{
+        Name = $share.Name
+        Path = $share.Path
+      } | ConvertTo-Json -Compress
+  register: windows_cluster_witness_share
+  changed_when: false
+  when: (windows_failover_cluster_witness_share_state | default('present')) == 'present'
+
+- name: assert the witness share path matches the configured directory
+  ansible.builtin.assert:
+    that:
+      - (windows_cluster_witness_share.output[0] | from_json).Path == mssql.cluster.witness.directory
+    fail_msg: >-
+      Witness share {{ mssql.cluster.witness.share_name }} does not point to
+      {{ mssql.cluster.witness.directory }}.
+  when: (windows_failover_cluster_witness_share_state | default('present')) == 'present'
+
+- name: remove the witness directory when tearing down the share
+  ansible.windows.win_file:
+    path: "{{ mssql.cluster.witness.directory }}"
+    state: absent
+  when: (windows_failover_cluster_witness_share_state | default('present')) == 'absent'

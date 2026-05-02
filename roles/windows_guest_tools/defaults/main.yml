@@ -1,0 +1,23 @@
+---
+windows_guest_tools_temp_dir: C:\Temp
+windows_guest_tools_task_name: InstallVirtioGuestTools
+
+windows_guest_tools_version: 0.1.266-1
+windows_guest_tools_base_url: >-
+  https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio
+windows_guest_tools_filename: virtio-win-guest-tools.exe
+windows_guest_tools_url: >-
+  {{ windows_guest_tools_base_url }}/virtio-win-{{ windows_guest_tools_version }}/{{ windows_guest_tools_filename }}
+windows_guest_tools_local_path: "{{ windows_guest_tools_temp_dir }}\\{{ windows_guest_tools_filename }}"
+windows_guest_tools_log_path: "{{ windows_guest_tools_temp_dir }}\\virtio-guest-tools-install.log"
+
+windows_guest_tools_winfsp_version: 2.0.23075
+windows_guest_tools_winfsp_url: >-
+  https://github.com/winfsp/winfsp/releases/download/v2.0/winfsp-{{ windows_guest_tools_winfsp_version }}.msi
+
+windows_guest_tools_state_dir: C:\ProgramData\VirtioFs
+windows_guest_tools_virtiofs_mount_script_path: "{{ windows_guest_tools_state_dir }}\\mount-shares.ps1"
+windows_guest_tools_virtiofs_boot_task_name: MountVirtioFsShares
+windows_guest_tools_winfsp_fsreg_path: C:\Program Files (x86)\WinFsp\bin\fsreg.bat
+windows_guest_tools_winfsp_launchctl_path: C:\Program Files (x86)\WinFsp\bin\launchctl-x64.exe
+windows_guest_tools_virtiofs_exe_path: C:\Program Files\Virtio-Win\VioFS\virtiofs.exe

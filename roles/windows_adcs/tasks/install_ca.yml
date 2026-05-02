@@ -1,0 +1,21 @@
+---
+- name: ensure the AD CS feature is installed
+  ansible.windows.win_feature:
+    name: AD-Certificate
+    state: present
+  register: windows_adcs_feature_install
+
+- name: reboot after AD CS feature install when required
+  ansible.windows.win_reboot:
+  when: windows_adcs_feature_install.reboot_required
+
+- name: ensure the enterprise root certificate authority is configured
+  win_adcs_ca:
+    state: present
+    ca_type: EnterpriseRootCa
+    crypto_provider_name: 'RSA#Microsoft Software Key Storage Provider'
+    key_length: 2048
+    hash_algorithm_name: SHA256
+  become: true
+  become_user: SYSTEM
+  become_method: ansible.builtin.runas

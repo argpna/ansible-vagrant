@@ -1,0 +1,113 @@
+---
+- name: assert required cluster creation settings are present
+  ansible.builtin.assert:
+    that:
+      - mssql.cluster.name is defined
+      - mssql.cluster.dns_name is defined
+      - mssql.cluster.witness.type == 'file_share'
+      - mssql.cluster.witness.path is defined
+      - mssql.topology.nodes is defined
+      - mssql.topology.nodes | length >= 2
+      - mssql.cluster.management_point_network_type | default('Singleton') in ['Singleton', 'Distributed']
+      - mssql.cluster.administrative_access_point | default('ActiveDirectoryAndDns') in ['ActiveDirectoryAndDns', 'Dns', 'None']
+      - >
+        (mssql.cluster.management_point_network_type | default('Singleton')) == 'Distributed'
+        or mssql.cluster.ips is defined
+    fail_msg: >-
+      mssql.cluster must define the cluster name, DNS name, file-share witness
+      path, and at least two MSSQL Windows cluster hosts before cluster creation. Singleton
+      management points also require mssql.cluster.ips.
+
+- name: validate the witness path is reachable from the cluster bootstrap node
+  ansible.windows.win_powershell:
+    script: |
+      $ErrorActionPreference = 'Stop'
+
+      if (-not (Test-Path '{{ mssql.cluster.witness.path }}')) {
+        throw "Witness path {{ mssql.cluster.witness.path }} is not reachable"
+      }
+  changed_when: false
+  become: true
+  become_method: ansible.builtin.runas
+  vars:
+    ansible_become_user: "{{ domain.admin.upn }}"
+    ansible_become_password: "{{ domain.admin.password }}"
+
+- name: check whether the cluster already exists
+  win_failover_cluster_info:
+    name: "{{ mssql.cluster.name }}"
+  register: windows_failover_cluster_info_result
+  changed_when: false
+  become: true
+  become_method: ansible.builtin.runas
+  vars:
+    ansible_become_user: "{{ domain.admin.upn }}"
+    ansible_become_password: "{{ domain.admin.password }}"
+
+- name: validate the cluster configuration before creation
+  ansible.windows.win_powershell:
+    script: |
+      $ErrorActionPreference = 'Stop'
+      Test-Cluster -Node {{ mssql.topology.nodes | join(',') }} -WarningAction SilentlyContinue | Out-Null
+  when: not windows_failover_cluster_info_result.exists
+  become: true
+  become_method: ansible.builtin.runas
+  vars:
+    ansible_become_user: "{{ domain.admin.upn }}"
+    ansible_become_password: "{{ domain.admin.password }}"
+
+- name: create the failover cluster
+  win_failover_cluster:
+    name: "{{ mssql.cluster.name }}"
+    nodes: "{{ mssql.topology.nodes }}"
+    administrative_access_point: "{{ mssql.cluster.administrative_access_point | default('ActiveDirectoryAndDns') }}"
+    management_point_network_type: "{{ mssql.cluster.management_point_network_type | default('Singleton') }}"
+    static_addresses: "{{ mssql.cluster.ips | default(omit) }}"
+    no_storage: true
+  register: windows_failover_cluster_create
+  become: true
+  become_method: ansible.builtin.runas
+  vars:
+    ansible_become_user: "{{ domain.admin.upn }}"
+    ansible_become_password: "{{ domain.admin.password }}"
+
+- name: wait briefly for cluster services to settle
+  ansible.builtin.pause:
+    seconds: 10
+  when: windows_failover_cluster_create.changed
+
+- name: configure the file share witness
+  win_failover_cluster_witness:
+    path: "{{ mssql.cluster.witness.path }}"
+  when: mssql.cluster.witness.type == 'file_share'
+  become: true
+  become_method: ansible.builtin.runas
+  vars:
+    ansible_become_user: "{{ domain.admin.upn }}"
+    ansible_become_password: "{{ domain.admin.password }}"
+
+- name: validate the cluster is online
+  win_failover_cluster_info:
+    name: "{{ mssql.cluster.name }}"
+  register: windows_failover_cluster_final_state
+  changed_when: false
+  retries: 6
+  delay: 10
+  until:
+    - windows_failover_cluster_final_state.exists
+    - windows_failover_cluster_final_state.cluster_group_state == 'Online'
+  become: true
+  become_method: ansible.builtin.runas
+  vars:
+    ansible_become_user: "{{ domain.admin.upn }}"
+    ansible_become_password: "{{ domain.admin.password }}"
+
+- name: require the cluster to be online
+  ansible.builtin.assert:
+    that:
+      - windows_failover_cluster_final_state.cluster_group_state == 'Online'
+    fail_msg: >-
+      Cluster {{ mssql.cluster.name }} is not online. Cluster group state:
+      {{ windows_failover_cluster_final_state.cluster_group_state | default('unknown') }}.
+      Node states:
+      {{ windows_failover_cluster_final_state.nodes | default([]) }}

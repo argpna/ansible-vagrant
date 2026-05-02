@@ -1,0 +1,222 @@
+---
+- name: require the libvirt network definition file to exist for present state
+  ansible.builtin.stat:
+    path: "{{ libvirt_host_network_item.xml_path }}"
+  register: libvirt_host_network_xml
+  when: libvirt_host_network_state == 'present'
+
+- name: require the libvirt network definition file for present state
+  ansible.builtin.assert:
+    that:
+      - libvirt_host_network_xml.stat.exists
+    fail_msg: >-
+      Missing libvirt network definition file:
+      {{ libvirt_host_network_item.xml_path }}
+  when: libvirt_host_network_state == 'present'
+
+- name: inspect current libvirt network state
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - net-info
+      - "{{ libvirt_host_network_item.name }}"
+  register: libvirt_host_network_info
+  failed_when: false
+  changed_when: false
+
+- name: derive libvirt lab network state flags
+  ansible.builtin.set_fact:
+    libvirt_host_network_exists: "{{ (libvirt_host_network_info.rc | default(1)) == 0 }}"
+    libvirt_host_network_active: "{{ (libvirt_host_network_info.stdout_lines | default([]) | select('match', '^Active:\\s+yes$') | list | length) > 0 }}"
+    libvirt_host_network_autostart_enabled: "{{ (libvirt_host_network_info.stdout_lines | default([]) | select('match', '^Autostart:\\s+yes$') | list | length) > 0 }}"
+
+- name: inspect current libvirt network definition
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - net-dumpxml
+      - "{{ libvirt_host_network_item.name }}"
+  register: libvirt_host_network_current_xml
+  changed_when: false
+  when:
+    - libvirt_host_network_state == 'present'
+    - libvirt_host_network_exists
+    - not libvirt_host_network_redefine
+
+- name: require existing libvirt network to match selected profile
+  ansible.builtin.assert:
+    that:
+      - >-
+        (libvirt_host_network_current_xml.stdout
+        | regex_search("<forward\\s+mode=['\"]" ~ (libvirt_host_network_item.forward_mode | default('route')) ~ "['\"]")) is not none
+      - >-
+        (libvirt_host_network_current_xml.stdout
+        | regex_search("<bridge\\s+[^>]*name=['\"]" ~ libvirt_host_network_item.bridge_name ~ "['\"]")) is not none
+      - >-
+        (libvirt_host_network_current_xml.stdout
+        | regex_search("<ip\\s+[^>]*address=['\"]" ~ libvirt_host_network_item.gateway ~ "['\"]")) is not none
+      - >-
+        (libvirt_host_network_current_xml.stdout
+        | regex_search("<ip\\s+[^>]*netmask=['\"]" ~ libvirt_host_network_item.netmask ~ "['\"]")) is not none
+    fail_msg: >-
+      Libvirt network {{ libvirt_host_network_item.name }} already exists, but
+      it does not match NETWORK_PROFILE={{ libvirt_host_network_profile }}.
+      Recreate it with
+      NETWORK_PROFILE={{ libvirt_host_network_profile }} ansible-playbook
+      playbooks/libvirt-host-network.yml -e libvirt_host_network_redefine=true.
+      Halt guests attached to {{ libvirt_host_network_item.name }} first if you
+      need to avoid dropping their network connection.
+  when:
+    - libvirt_host_network_state == 'present'
+    - libvirt_host_network_exists
+    - not libvirt_host_network_redefine
+
+- name: destroy the active libvirt lab network before redefine
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - net-destroy
+      - "{{ libvirt_host_network_item.name }}"
+  register: libvirt_host_network_destroy_for_redefine
+  changed_when: true
+  when:
+    - libvirt_host_network_state == 'present'
+    - libvirt_host_network_redefine
+    - libvirt_host_network_exists
+    - libvirt_host_network_active
+
+- name: undefine the libvirt lab network before redefine
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - net-undefine
+      - "{{ libvirt_host_network_item.name }}"
+  register: libvirt_host_network_undefine_for_redefine
+  changed_when: true
+  when:
+    - libvirt_host_network_state == 'present'
+    - libvirt_host_network_redefine
+    - libvirt_host_network_exists
+
+- name: refresh libvirt network state after redefine cleanup
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - net-info
+      - "{{ libvirt_host_network_item.name }}"
+  register: libvirt_host_network_info
+  failed_when: false
+  changed_when: false
+  when:
+    - libvirt_host_network_state == 'present'
+    - libvirt_host_network_redefine
+    - libvirt_host_network_exists
+
+- name: refresh libvirt network state flags after redefine cleanup
+  ansible.builtin.set_fact:
+    libvirt_host_network_exists: "{{ (libvirt_host_network_info.rc | default(1)) == 0 }}"
+    libvirt_host_network_active: "{{ (libvirt_host_network_info.stdout_lines | default([]) | select('match', '^Active:\\s+yes$') | list | length) > 0 }}"
+    libvirt_host_network_autostart_enabled: "{{ (libvirt_host_network_info.stdout_lines | default([]) | select('match', '^Autostart:\\s+yes$') | list | length) > 0 }}"
+  when:
+    - libvirt_host_network_state == 'present'
+    - libvirt_host_network_redefine
+    - libvirt_host_network_exists
+
+- name: define the libvirt lab network
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - net-define
+      - "{{ libvirt_host_network_item.xml_path }}"
+  register: libvirt_host_network_define
+  changed_when: true
+  when:
+    - libvirt_host_network_state == 'present'
+    - not libvirt_host_network_exists
+
+- name: refresh libvirt network state after define
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - net-info
+      - "{{ libvirt_host_network_item.name }}"
+  register: libvirt_host_network_info
+  changed_when: false
+  when:
+    - libvirt_host_network_state == 'present'
+    - libvirt_host_network_define is changed
+
+- name: refresh libvirt network state flags after define
+  ansible.builtin.set_fact:
+    libvirt_host_network_exists: "{{ (libvirt_host_network_info.rc | default(1)) == 0 }}"
+    libvirt_host_network_active: "{{ (libvirt_host_network_info.stdout_lines | default([]) | select('match', '^Active:\\s+yes$') | list | length) > 0 }}"
+    libvirt_host_network_autostart_enabled: "{{ (libvirt_host_network_info.stdout_lines | default([]) | select('match', '^Autostart:\\s+yes$') | list | length) > 0 }}"
+  when:
+    - libvirt_host_network_state == 'present'
+    - libvirt_host_network_define is changed
+
+- name: enable libvirt lab network autostart
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - net-autostart
+      - "{{ libvirt_host_network_item.name }}"
+  register: libvirt_host_network_autostart_enable
+  changed_when: true
+  when:
+    - libvirt_host_network_state == 'present'
+    - libvirt_host_network_autostart
+    - libvirt_host_network_exists
+    - not libvirt_host_network_autostart_enabled
+
+- name: start the libvirt lab network
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - net-start
+      - "{{ libvirt_host_network_item.name }}"
+  register: libvirt_host_network_start
+  changed_when: true
+  when:
+    - libvirt_host_network_state == 'present'
+    - libvirt_host_network_exists
+    - not libvirt_host_network_active
+
+- name: destroy the active libvirt lab network
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - net-destroy
+      - "{{ libvirt_host_network_item.name }}"
+  register: libvirt_host_network_destroy
+  changed_when: true
+  when:
+    - libvirt_host_network_state in ['absent', 'purged']
+    - libvirt_host_network_exists
+    - libvirt_host_network_active
+
+- name: disable libvirt lab network autostart
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - net-autostart
+      - --disable
+      - "{{ libvirt_host_network_item.name }}"
+  register: libvirt_host_network_autostart_disable
+  changed_when: true
+  when:
+    - libvirt_host_network_state in ['absent', 'purged']
+    - libvirt_host_network_exists
+    - libvirt_host_network_autostart_enabled
+
+- name: undefine the libvirt lab network
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - net-undefine
+      - "{{ libvirt_host_network_item.name }}"
+  register: libvirt_host_network_undefine
+  changed_when: true
+  when:
+    - libvirt_host_network_state == 'purged'
+    - libvirt_host_network_exists

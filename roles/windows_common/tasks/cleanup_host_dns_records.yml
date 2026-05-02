@@ -1,0 +1,13 @@
+---
+- name: remove unexpected A records for the host from the AD DNS zone
+  win_dns_host_record_cleanup:
+    zone_name: "{{ domain.name }}"
+    record_name: "{{ inventory_hostname }}"
+    expected_ip: "{{ ansible_host }}"
+  register: windows_dns_cleanup
+  delegate_to: "{{ groups['domain_controller'][0] }}"
+  become: true
+  become_method: ansible.builtin.runas
+  vars:
+    ansible_become_user: "{{ domain.admin.upn }}"
+    ansible_become_password: "{{ domain.admin.password }}"

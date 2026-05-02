@@ -1,0 +1,6 @@
+---
+# Use "tasks_from:" for operation-specific entrypoints:
+# - prereqs.yml
+# - file_share_witness.yml
+# - create-cluster.yml
+# - destroy-cluster.yml

@@ -1,0 +1,42 @@
+---
+- name: install ansible and windows controller dependencies into the virtualenv
+  ansible.builtin.pip:
+    name: "{{ [controller.ansible.package_spec] + controller.ansible.python_packages }}"
+    executable: "{{ controller.python.venv_path }}/bin/pip"
+
+- name: validate pip in the controller virtualenv
+  ansible.builtin.command:
+    cmd: "{{ controller.python.venv_path }}/bin/pip --version"
+  changed_when: false
+
+- name: validate ansible in the controller virtualenv
+  ansible.builtin.command:
+    cmd: "{{ controller.python.venv_path }}/bin/ansible --version"
+  changed_when: false
+
+- name: validate controller python dependencies in the virtualenv
+  ansible.builtin.command:
+    argv:
+      - "{{ controller.python.venv_path }}/bin/python"
+      - -c
+      - "import gssapi, pypsrp, requests_credssp, requests_kerberos, winrm"
+  changed_when: false
+
+- name: install an Ansible environment shell helper
+  ansible.builtin.copy:
+    dest: /usr/local/bin/enter-ansible-env
+    mode: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      rcfile="$(mktemp)"
+      cat > "${rcfile}" <<'EOF'
+      if [ -f /etc/bash.bashrc ]; then
+        source /etc/bash.bashrc
+      fi
+      if [ -f "${HOME}/.bashrc" ]; then
+        source "${HOME}/.bashrc"
+      fi
+      source "{{ controller.python.venv_path }}/bin/activate"
+      EOF
+      exec /bin/bash --rcfile "${rcfile}" -i
