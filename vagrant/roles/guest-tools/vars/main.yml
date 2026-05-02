@@ -1,8 +1,0 @@
-virtio_gt_local: "{{ temp_dir }}\\{{ virtio_gt_filename }}"
-virtio_log_path: "{{ temp_dir }}\\virtio-gt-install.log"
-virtio_task_name: InstallVirtioGT
-virtio_gt_url: >-
-  {{ virtio_base_url }}/virtio-win-{{ virtio_version }}/{{ virtio_gt_filename }}
-
-winfsp_url: >-
-  {{ winfsp_base_url }}/winfsp-{{ winfsp_version }}.msi
