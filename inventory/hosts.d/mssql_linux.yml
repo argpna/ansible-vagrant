@@ -1,0 +1,206 @@
+all:
+  children:
+    databases:
+      children:
+        mssql:
+          children:
+            mssql_linux_ag:
+              hosts:
+                linux-cluster-n01:
+                  os: linux
+                  ansible_host: 192.168.131.61
+                  mac: 02:56:c0:a8:83:3d
+                  vagrant_box: cloud-image/ubuntu-22.04
+                  network_interfaces:
+                    - name: sql
+                      network: mssql-main
+                      ip: 192.168.131.61
+                      mac: 02:56:c0:a8:83:3d
+                      role: sql
+
+                linux-cluster-n02:
+                  os: linux
+                  ansible_host: 192.168.132.62
+                  mac: 02:56:c0:a8:84:3e
+                  vagrant_box: cloud-image/ubuntu-22.04
+                  network_interfaces:
+                    - name: sql
+                      network: mssql-dr
+                      ip: 192.168.132.62
+                      mac: 02:56:c0:a8:84:3e
+                      role: sql
+
+            mssql_linux_matrix:
+              children:
+                mssql_linux_apt:
+                  hosts:
+                    ubuntu2004-sql2019:
+                      os: linux
+                      ansible_host: 192.168.131.101
+                      mac: 02:56:c0:a8:83:65
+                      vagrant_box: cloud-image/ubuntu-20.04
+                      ansible_python_interpreter: /usr/bin/python3
+                      sql_version: 2019
+                      provider_options:
+                        cpus: 2
+                      network_interfaces:
+                        - name: sql
+                          network: mssql-main
+                          ip: 192.168.131.101
+                          mac: 02:56:c0:a8:83:65
+                          role: sql
+
+                    ubuntu2004-sql2022:
+                      os: linux
+                      ansible_host: 192.168.131.102
+                      mac: 02:56:c0:a8:83:66
+                      vagrant_box: cloud-image/ubuntu-20.04
+                      ansible_python_interpreter: /usr/bin/python3
+                      sql_version: 2022
+                      provider_options:
+                        cpus: 2
+                      network_interfaces:
+                        - name: sql
+                          network: mssql-main
+                          ip: 192.168.131.102
+                          mac: 02:56:c0:a8:83:66
+                          role: sql
+
+                    ubuntu2204-sql2022:
+                      os: linux
+                      ansible_host: 192.168.131.103
+                      mac: 02:56:c0:a8:83:67
+                      vagrant_box: cloud-image/ubuntu-22.04
+                      ansible_python_interpreter: /usr/bin/python3
+                      sql_version: 2022
+                      provider_options:
+                        cpus: 2
+                      network_interfaces:
+                        - name: sql
+                          network: mssql-main
+                          ip: 192.168.131.103
+                          mac: 02:56:c0:a8:83:67
+                          role: sql
+
+                    ubuntu2204-sql2025:
+                      os: linux
+                      ansible_host: 192.168.131.104
+                      mac: 02:56:c0:a8:83:68
+                      vagrant_box: cloud-image/ubuntu-22.04
+                      ansible_python_interpreter: /usr/bin/python3
+                      sql_version: 2025
+                      provider_options:
+                        cpus: 2
+                      network_interfaces:
+                        - name: sql
+                          network: mssql-main
+                          ip: 192.168.131.104
+                          mac: 02:56:c0:a8:83:68
+                          role: sql
+
+                    ubuntu2404-sql2025:
+                      os: linux
+                      ansible_host: 192.168.131.105
+                      mac: 02:56:c0:a8:83:69
+                      vagrant_box: cloud-image/ubuntu-24.04
+                      ansible_python_interpreter: /usr/bin/python3
+                      sql_version: 2025
+                      provider_options:
+                        cpus: 2
+                      network_interfaces:
+                        - name: sql
+                          network: mssql-main
+                          ip: 192.168.131.105
+                          mac: 02:56:c0:a8:83:69
+                          role: sql
+
+                mssql_linux_dnf:
+                  hosts:
+                    rocky8-sql2019:
+                      os: linux
+                      ansible_host: 192.168.131.111
+                      mac: 02:56:c0:a8:83:6f
+                      vagrant_box: cloud-image/rocky-8
+                      ansible_python_interpreter: /usr/bin/python3
+                      sql_version: 2019
+                      provider_options:
+                        cpus: 2
+                      network_interfaces:
+                        - name: sql
+                          network: mssql-main
+                          ip: 192.168.131.111
+                          mac: 02:56:c0:a8:83:6f
+                          role: sql
+
+                    rocky8-sql2022:
+                      os: linux
+                      ansible_host: 192.168.131.112
+                      mac: 02:56:c0:a8:83:70
+                      vagrant_box: cloud-image/rocky-8
+                      ansible_python_interpreter: /usr/bin/python3
+                      sql_version: 2022
+                      provider_options:
+                        cpus: 2
+                      network_interfaces:
+                        - name: sql
+                          network: mssql-main
+                          ip: 192.168.131.112
+                          mac: 02:56:c0:a8:83:70
+                          role: sql
+
+                    rocky9-sql2022:
+                      os: linux
+                      ansible_host: 192.168.131.113
+                      mac: 02:56:c0:a8:83:71
+                      vagrant_box: cloud-image/rocky-9
+                      ansible_python_interpreter: /usr/bin/python3
+                      sql_version: 2022
+                      provider_options:
+                        cpus: 2
+                      network_interfaces:
+                        - name: sql
+                          network: mssql-main
+                          ip: 192.168.131.113
+                          mac: 02:56:c0:a8:83:71
+                          role: sql
+
+                    rocky9-sql2025:
+                      os: linux
+                      ansible_host: 192.168.131.114
+                      mac: 02:56:c0:a8:83:72
+                      vagrant_box: cloud-image/rocky-9
+                      ansible_python_interpreter: /usr/bin/python3
+                      sql_version: 2025
+                      provider_options:
+                        cpus: 2
+                      network_interfaces:
+                        - name: sql
+                          network: mssql-main
+                          ip: 192.168.131.114
+                          mac: 02:56:c0:a8:83:72
+                          role: sql
+
+                mssql_linux_unsupported:
+                  hosts:
+                    opensuse15-sql2022:
+                      os: linux
+                      ansible_host: 192.168.131.120
+                      mac: 02:56:c0:a8:83:78
+                      vagrant_box: cloud-image/opensuse-leap-15.6
+                      ansible_python_interpreter: /usr/bin/python3.11
+                      sql_version: 2022
+                      provider_options:
+                        cpus: 2
+                      network_interfaces:
+                        - name: sql
+                          network: mssql-main
+                          ip: 192.168.131.120
+                          mac: 02:56:c0:a8:83:78
+                          role: sql
+
+    linux:
+      children:
+        linux_hosts:
+          children:
+            mssql_linux_ag: {}
+            mssql_linux_matrix: {}

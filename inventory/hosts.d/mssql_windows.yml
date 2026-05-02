@@ -1,0 +1,57 @@
+all:
+  children:
+    databases:
+      children:
+        mssql:
+          children:
+            mssql_windows_ag:
+              hosts:
+                win-cluster-n01:
+                  os: windows
+                  ansible_host: 192.168.131.23
+                  mac: 02:56:c0:a8:83:17
+                  vagrant_box: jborean93/WindowsServer2022
+                  network_interfaces:
+                    - name: sql
+                      network: mssql-main
+                      ip: 192.168.131.23
+                      mac: 02:56:c0:a8:83:17
+                      role: sql
+
+                win-cluster-n02:
+                  os: windows
+                  ansible_host: 192.168.132.24
+                  mac: 02:56:c0:a8:84:18
+                  vagrant_box: jborean93/WindowsServer2022
+                  network_interfaces:
+                    - name: sql
+                      network: mssql-dr
+                      ip: 192.168.132.24
+                      mac: 02:56:c0:a8:84:18
+                      role: sql
+
+            mssql_windows_matrix:
+              hosts:
+                win2022-sql2022:
+                  os: windows
+                  ansible_host: 192.168.131.130
+                  mac: 02:56:c0:a8:83:82
+                  vagrant_box: jborean93/WindowsServer2022
+                  sql_version: 2022
+                  provider_options:
+                    memory_mb: 8192
+                  network_interfaces:
+                    - name: sql
+                      network: mssql-main
+                      ip: 192.168.131.130
+                      mac: 02:56:c0:a8:83:82
+                      role: sql
+
+    windows:
+      children:
+        domain_members:
+          children:
+            windows_member_hosts:
+              children:
+                mssql_windows_matrix: {}
+            mssql_windows_ag: {}

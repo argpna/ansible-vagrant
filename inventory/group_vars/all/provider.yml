@@ -1,0 +1,6 @@
+---
+provider_options:
+  cpus: 4
+  memory_mb: 4096
+  memory_backing: "off"
+  sync_folders: []

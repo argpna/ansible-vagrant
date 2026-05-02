@@ -1,0 +1,30 @@
+---
+domain_controller_host: "{{ groups['domain_controller'] | first }}"
+domain_controller_ip: "{{ hostvars[groups['domain_controller'] | first].ansible_host }}"
+
+domain:
+  name: lab.local
+  netbios_name: LAB
+  controller_host: "{{ domain_controller_host }}"
+  controller_ip: "{{ domain_controller_ip }}"
+  safe_mode_password: VagrantPass1
+  admin:
+    username: vagrant-admin
+    password: VagrantPass1
+    upn: vagrant-admin@LAB.LOCAL
+
+kerberos:
+  realm: LAB.LOCAL
+  kdc_host: "{{ domain_controller_host }}"
+  kdc_ip: "{{ domain_controller_ip }}"
+
+dns:
+  mode: local_forwarder
+  upstream_server: "{{ domain_controller_ip }}"
+
+certificates:
+  adcs_enabled: true
+  autoenroll_enabled: true
+  autoenroll_template: WorkstationCertAutoEnroll
+  gpo_name: WorkstationCertificateAutoEnroll
+  winrm_listener_cert_mode: adcs_autoenroll

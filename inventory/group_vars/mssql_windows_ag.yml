@@ -1,0 +1,84 @@
+provider_options:
+  memory_backing: memfd
+
+windows_extras:
+  host_shares:
+    - name: sqlmedia
+      source: /var/lib/libvirt/images/iso/sql2022
+      tag: sqlmedia
+      guest:
+        drive: "S:"
+      readonly: true
+
+windows_sql_server:
+  state: present
+  media_path: null
+  media_iso_source_dir: 'S:\'
+  media_iso_filename: SQLServer2022-x64-ENU.iso
+  media_stage_directory_name: sql-server-media
+  dismount_media_after_install: true
+  instance_name: MSSQLSERVER
+  features:
+    - SQLEngine
+  service_accounts:
+    manage: true
+    sqlsvc:
+      sam_account_name: sqlsvc
+      password: VagrantPass1!
+      description: SQL Server Database Engine service account
+    agtsvc:
+      sam_account_name: sqlagent
+      password: VagrantPass1!
+      description: SQL Server Agent service account
+  sqlsysadminaccounts:
+    - "{{ domain.netbios_name }}\\{{ domain.admin.username }}"
+  security_mode: Windows
+  sa_password: null
+  browser_startup_type: Disabled
+  update_enabled: false
+  update_source: null
+  product_key: null
+  install_shared_dir: null
+  install_shared_wow_dir: null
+  instance_dir: null
+  install_sql_data_dir: null
+  sql_user_db_dir: null
+  sql_user_db_log_dir: null
+  sql_temp_db_dir: null
+  sql_temp_db_log_dir: null
+  reboot_if_required: true
+
+mssql:
+  cluster:
+    name: wincl01
+    management_point_network_type: Singleton
+    administrative_access_point: ActiveDirectoryAndDns
+    ips:
+      - 192.168.131.40
+      - 192.168.132.40
+    dns_name: wincl01.lab.local
+    witness:
+      type: file_share
+      host: domain-con-01
+      share_name: wincl01-witness$
+      directory: C:\ClusterWitness\wincl01
+      path: \\domain-con-01.lab.local\wincl01-witness$
+    listener:
+      name: agln01
+      dns_name: agln01.lab.local
+      ips:
+        - address: 192.168.131.50
+          subnet: 192.168.131.0/24
+        - address: 192.168.132.50
+          subnet: 192.168.132.0/24
+  ag:
+    name: ag01
+    cluster_type: wsfc
+  topology:
+    mode: multi_subnet
+    nodes:
+      - win-cluster-n01
+      - win-cluster-n02
+    node_subnets:
+      win-cluster-n01: 192.168.131.0/24
+      win-cluster-n02: 192.168.132.0/24
