@@ -1,7 +1,12 @@
-*.retry
-*/.vagrant/*
-*.log
 *.DS_Store
-vagrant/ca_chain.pem
-scratchpad
+*.log
+*.retry
+__pycache__/
+.ansible/
 .archive/
+.codex
+.debug/
+.patches/
+.project/
+.vagrant/
+ca_chain.pem
