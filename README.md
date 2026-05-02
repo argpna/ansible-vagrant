@@ -1,60 +1,284 @@
-
 # Ansible & Vagrant
 
 > [!NOTE]
-> This repo is a fork of
-> [jborean93/ansible-windows](https://github.com/jborean93/ansible-windows) with
-> some changes (see below).
+> This repo is based on [jborean93/ansible-windows](https://github.com/jborean93/ansible-windows), but has been reworked for Vagrant with the libvirt provider.
 
-The Vagrantfile is primarily inventory driven and is written to work with
-libvirt provider. You can use it to spin up a single Windows or Linux host
-or a standalone domain that contains a mixture of Windows and Linux hosts
+This repo contains Ansible roles, playbooks and a libvirt-backed Vagrant workflow to
+build and manage Windows and Linux VMs (weighted more towards mssql infrastructure).
+
+It can also be used as a general-purpose infrastructure repository when Vagrant provisioning
+is omitted.
 
 ## Requires
 
 * Vagrant
-* Libvirt and the vagrant-libvirt plugin
-* pypsrp
+* libvirt
+* the `vagrant-libvirt` plugin
+* Ansible on the host system running Vagrant
 
-## The Inventory
 
-The inventory controls how hosts are created and provisioned. Along with
-normal Ansible host variables, you can define libvirt provider options here.
-These are options that would normally be hardcoded in the Vagrantfile.
+## Provisioning
 
-For example
+This repo provisions the lab from the dynamic inventory in
+[inventory/inventory.py](inventory/inventory.py), which resolves host data from
+[inventory/hosts.yml](inventory/hosts.yml), [inventory/hosts.d](inventory/hosts.d),
+and [inventory/group_vars](inventory/group_vars). Vagrant uses that resolved
+inventory to run [playbooks/main.yml](playbooks/main.yml) against the selected
+hosts with the appropriate Ansible host limit.
 
-```yaml
-provider_options:
-  cpus: 4
-  memory_mb: 4096
-  cpu_mode: host-passthrough
-  nic_model: virtio
-  graphics:
-    type: spice
-  video_type: qxl
-  memory_backing: "off"
-  sync_folders: []
-```
+The provisioning flow covers:
 
-These values are read by the Vagrantfile and applied accordingly.
+* A Linux control node for Ansible and module development work
+* Standalone Linux hosts
+* A Windows domain controller
+* Windows domain member hosts
+* AD CS with machine auto-enrollment
+* WinRM HTTPS listener certificates issued by the lab CA
+* Optional Guest tools and OpenSSH on Windows boxes
 
-## The Vagrantfile
+The Linux control node is the intended working environment for the repo's
+Ansible toolchain. It builds its own Python and virtualenv, then installs
+Ansible and the required Windows connection dependencies there instead of
+depending on the base VM Python environment.
 
-If you want to support additional provider options, you can extend
-`PROVIDER_OPTIONS_ALLOWED`.
+> [!NOTE]
+> If you only want to spin up standalone Vagrant hosts and do not need the
+> Ansible control-node workflow or the lab domain setup, simply use `--no-provision`
+> with `vagrant up`.
+
+
+## Inventory Layout
+
+The inventory is organized by host role:
+
+* `control_node` -
+  the Linux Ansible control node
+* `linux_hosts` -
+  optional non-controller Linux hosts and the parent group for Linux MSSQL validation hosts
+* `domain_controller` -
+  the Windows domain controller
+* `domain_members` -
+  Windows domain-joined member hosts, currently Windows MSSQL test hosts
+* `mssql_windows_matrix` -
+  standalone Windows MSSQL install validation matrix
+* `mssql_linux_matrix` -
+  Linux MSSQL install validation matrix, with `mssql_linux_apt`, `mssql_linux_dnf`, and `mssql_linux_unsupported` subgroups
+* `mssql_windows_ag` -
+  Windows SQL Server availability group test nodes using WSFC
+* `mssql_linux_ag` -
+  Linux SQL Server availability group test nodes
+
+Core hosts live in `inventory/hosts.yml`. MSSQL host definitions live in
+`inventory/hosts.d/mssql_linux.yml` and `inventory/hosts.d/mssql_windows.yml`, and `inventory.py` exposes the inventory to Ansible and Vagrant.
+
+Shared lab settings live in group vars:
+
+* [all](inventory/group_vars/all) -
+  domain, Kerberos, DNS, certificates, provider defaults
+* [linux.yml](inventory/group_vars/linux.yml) -
+  Linux connection settings and Linux libvirt defaults
+* [windows.yml](inventory/group_vars/windows.yml) -
+  PSRP connection settings and optional Windows extras
+* [control_node.yml](inventory/group_vars/control_node.yml) -
+  control-node Python, Ansible, and admin-user settings
+* [mssql_windows_ag.yml](inventory/group_vars/mssql_windows_ag.yml) -
+  MSSQL cluster, availability groups topology settings
+* [mssql_linux_ag.yml](inventory/group_vars/mssql_linux_ag.yml) -
+  Linux MSSQL availability groups topology settings (only placeholder at the moment)
+
+Two singleton groups are assumed by the playbooks:
+
+* `control_node`
+* `domain_controller`
+
+The playbooks assert that each of those groups contains exactly one host at the moment.
+
+## Role Map
+
+The roles are grouped by responsibility. The per-role README files document
+their variables and caveats in more detail.
+
+### Controller roles
+
+These roles prepare the Linux control node used to run Ansible, PSRP, WinRM,
+and repo-local tooling.
+
+* [linux_base](roles/linux_base/README.md) -
+  installs baseline Linux packages, creates the controller admin user and
+  group, installs the authorized key, and grants passwordless sudo
+* [linux_kerberos_client](roles/linux_kerberos_client/README.md) -
+  installs Kerberos and DNS client pieces and renders the local Kerberos and
+  resolver configuration needed to talk to the AD lab
+* [controller_python](roles/controller_python/README.md) -
+  builds the configured Python from source, validates the interpreter version,
+  and creates the controller virtualenv
+* [controller_ansible](roles/controller_ansible/README.md) -
+  installs Ansible plus the Windows controller dependencies into that virtualenv
+  and adds the `enter-ansible-env` shell helper
+
+These roles are normally driven together by
+[controller-node.yml](playbooks/controller-node.yml).
+
+### Libvirt host roles
+
+These roles manage libvirt host-side prerequisites.
+
+* [libvirt_host_network](roles/libvirt_host_network/README.md) -
+  resolves the active network profile from inventory, generates libvirt network
+  XML, defines and starts the routed lab networks, and optionally manages
+  firewalld plus scoped nftables outbound NAT
+* [libvirt_host_share](roles/libvirt_host_share/README.md) -
+  validates host share records, resolves the effective libvirt domain name,
+  renders virtiofs filesystem XML, and attaches the shares to the persistent
+  and optionally live domain definition
+
+These roles are typically driven by:
+
+* [libvirt-host-network.yml](playbooks/libvirt-host-network.yml)
+* [libvirt-host-share.yml](playbooks/libvirt-host-share.yml)
+
+### Windows platform roles
+
+These roles build the Windows lab platform itself before SQL Server or WSFC
+work starts.
+
+* [windows_domain_controller](roles/windows_domain_controller/README.md) -
+  points DNS at localhost, promotes the host to a domain controller, creates
+  the initial domain admin, and validates that identity
+* [windows_domain_member](roles/windows_domain_member/README.md) -
+  points member hosts at the DC for DNS, joins them to the domain, reboots when
+  needed, and validates domain logon
+* [windows_adcs](roles/windows_adcs/README.md) -
+  installs the CA, publishes the auto-enrollment template, configures the GPO,
+  and exports the CA chain
+* [windows_winrm_cert](roles/windows_winrm_cert/README.md) -
+  refreshes policy, triggers certificate enrollment, locates the correct issued
+  certificate, and rebinds the WinRM HTTPS listener when needed
+* [windows_common](roles/windows_common/README.md) -
+  provides repo-local helper modules used by the Windows roles so connection,
+  certificate, and SQL flows do not have to duplicate inline PowerShell logic
+
+These roles are split across:
+
+* [windows-domain-controller.yml](playbooks/windows-domain-controller.yml)
+* [windows-domain-members.yml](playbooks/windows-domain-members.yml)
+* [windows-certificates.yml](playbooks/windows-certificates.yml)
+
+### Windows SQL and cluster roles
+
+These roles are the SQL Server and WSFC-focused part of the repo.
+
+* [windows_sql_server](roles/windows_sql_server/README.md) -
+  manages SQL Server setup by handling service accounts first and then driving
+  Microsoft `setup.exe` with repo-local modules and inventory-backed SQL
+  settings
+* [windows_failover_cluster](roles/windows_failover_cluster/README.md) -
+  exposes operation-specific WSFC entrypoints such as prerequisites, file share
+  witness, and cluster creation instead of forcing everything through one large
+  cluster task file
+
+Primary playbooks:
+
+* [windows-sql-server.yml](playbooks/windows-sql-server.yml)
+* [windows-failover-cluster.yml](playbooks/windows-failover-cluster.yml)
+
+### Optional Windows utility roles
+
+These roles are optional and are not treated as baseline requirements for every Windows host.
+
+* [windows_guest_tools](roles/windows_guest_tools/README.md) -
+  installs WinFSP and virtio guest tools, then configures virtiofs tag-to-drive
+  mounts when host shares are present
+* [windows_openssh](roles/windows_openssh/README.md) -
+  installs the OpenSSH Server capability and manages the service, firewall
+  rule, and default shell
+
+Utility playbooks:
+
+* [windows-guest-tools.yml](playbooks/windows-guest-tools.yml)
+* [windows-openssh.yml](playbooks/windows-openssh.yml)
+
+## Control Node Flow
+
+The control-node playbook is [controller-node.yml](playbooks/controller-node.yml). It runs:
+
+* [linux_base](roles/linux_base/README.md)
+* [linux_kerberos_client](roles/linux_kerberos_client/README.md)
+* [controller_python](roles/controller_python/README.md)
+* [controller_ansible](roles/controller_ansible/README.md)
+
+which produces:
+
+* A Linux admin user (with passwordless sudo)
+* Kerberos and DNS configuration so the control node can resolve and reach the AD lab
+* A Python runtime built from source (to avoid distro-specific package related complexities)
+* A control-node virtualenv at `/home/ansible/controller-venv`
+* `ansible`, `pypsrp`, `pywinrm`, `requests-kerberos`, `requests-credssp`, and `gssapi` installed inside that virtualenv
+* `/usr/local/bin/enter-ansible-env`, which starts a shell and activates the control-node virtualenv
+
+Current control-node defaults from [control_node.yml](inventory/group_vars/control_node.yml):
+
+* Python line: `3.11`
+* source build version: `3.11.1`
+* virtualenv path: `/home/ansible/controller-venv`
+* Ansible package: `ansible==12.3.0`
+
+These are defaults in inventory. Modify them accordingly if you want a different control-node toolchain.
+
+## Windows Domain Flow
+
+The Windows domain lifecycle is split into separate playbooks:
+
+* [windows-domain-controller.yml](playbooks/windows-domain-controller.yml)
+  promotes the controller and creates the initial domain admin
+* [windows-domain-members.yml](playbooks/windows-domain-members.yml)
+  joins member hosts to the domain and validates domain logon
+* [windows-certificates.yml](playbooks/windows-certificates.yml)
+  configures AD CS and updates WinRM HTTPS listeners for the controller and members
+
+The Windows flow uses:
+
+* [windows_domain_controller](roles/windows_domain_controller/README.md)
+  promote the DC and create the initial domain admin
+* [windows_domain_member](roles/windows_domain_member/README.md)
+  point DNS at the DC, join the domain, reboot if needed
+* [windows_adcs](roles/windows_adcs/README.md)
+  install the CA, publish the machine template, configure the auto-enrollment GPO, export the CA chain
+* [windows_winrm_cert](roles/windows_winrm_cert/README.md)
+  enroll/select the correct machine certificate and rebind the WinRM HTTPS listener
+
+When AD CS is enabled, [windows-certificates.yml](playbooks/windows-certificates.yml) also writes [ca_chain.pem](ca_chain.pem) in the repo root. The Windows connection defaults use that file to switch PSRP from certificate validation `ignore` during bootstrap to validated HTTPS once the lab CA chain is available. After the chain exists locally, PSRP connects to the Windows host FQDN instead of the inventory IP so the WinRM listener certificate can be validated against its DNS SAN.
+
+## Optional Windows Utilities
+
+Additional utility playbooks are available:
+
+* [windows-guest-tools.yml](playbooks/windows-guest-tools.yml)
+  install SPICE, WinFSP, and VirtIO guest tools through [windows_guest_tools](roles/windows_guest_tools/README.md)
+* [windows-openssh.yml](playbooks/windows-openssh.yml)
+  install and configure the Windows OpenSSH Server capability through [windows_openssh](roles/windows_openssh/README.md)
+
+When running [main.yml](playbooks/main.yml), the guest-tools and OpenSSH utility
+imports are tagged `never`. Run them explicitly with `--tags windows_guest_tools`
+or `--tags windows_openssh` when you want those utility flows included.
+
+## Provider Options
+
+Provider settings are inventory-driven. The Vagrant provider helper currently accepts: `cpus`, `memory_mb`, `cpu_mode`, `nic_model`, `video_type`, `graphics`, `memory_backing`, `sync_folders`
+
+Additional options can be included by extending `ProviderOptions::ALLOWED` in [provider_options.rb](vagrant/lib/provider_options.rb).
 
 For example, to add support for CPU topology
 
 ```ruby
-PROVIDER_OPTIONS_ALLOWED = %w[
+ALLOWED = %w[
   ...
   ...
   cpu_topology
 ].freeze
 ```
 
-Then update the `apply_provider_options` function and append something like
+Then update `ProviderOptions.apply_provider_options` and append something like
 
 ```ruby
 if opts['cpu_topology'].is_a?(Hash)
@@ -80,124 +304,46 @@ provider_options:
   ...
 ```
 
-You can add validation, defaults, or better error handling if you want.
-The idea is to keep things flexible and let the inventory drive what gets
-exposed.
+Better validation, error handling etc can be added as needed. The idea is to keep things flexible and let the inventory drive what gets exposed.
 
 > [!NOTE]
 > Vagrant libvirt documentation reference can be found
 > [here](https://vagrant-libvirt.github.io/vagrant-libvirt/configuration.html)
 
-## The Roles
+Global defaults come from [inventory/group_vars/all](inventory/group_vars/all), with Linux and Windows overlays from [linux.yml](inventory/group_vars/linux.yml) and [windows.yml](inventory/group_vars/windows.yml). Host-level `provider_options` override those merged defaults.
 
-Each role has its own README, a short summary of what is included:
+Linux sync-folder defaults currently enable read-write `virtiofs` for the repo root at `/vagrant`.
 
-* adcs-enrollment
+## Vagrant Provision
 
-  * Installs and configures Active Directory Certificate Services and sets up
-    a GPO so all domain machines automatically enroll for certificates.
-
-* adcs-winrm
-
-  * Updates the existing WinRM HTTPS listener to use the auto-enrolled
-    certificate issued by AD CS.
-
-* ansible-setup
-
-  * Creates a Python 3 virtual environment in the user's home directory with
-    Ansible and pywinrm installed. It also pulls the latest devel checkout and
-    loads it via the shell.
-
-* domain-join
-
-  * Joins a host to an existing domain based on inventory variables.
-
-* domain-setup
-
-  * Creates a new Windows domain. This is a minimal setup with no hardening
-    or security best practices applied.
-
-* kerberos
-
-  * Installs and configures Kerberos packages, DNS, and realm settings so the
-    host can authenticate against the domain.
-
-* python
-
-  * Builds and installs Python using `make altinstall` under
-    `/usr/local/bin/python*`.
-
-* user-setup
-
-  * Creates an admin user and installs an SSH key based on inventory variables.
-
-* guest-tools
-
-  * Installs spice-guest, winfsp, virtiofs tools, and enables OpenSSH server capability.
-
-## Examples
-
-To bring up a standalone domain controller (dc01) and join another Windows
-host (win2022)
+Bring up a specific host:
 
 ```sh
-vagrant up dc01 win2022 --provision
+vagrant up ansible-con-01 --provision
 ```
 
-This creates a domain environment with
-
-* A domain user defined in `inventory.yml` that is a member of Domain Admins
-* Active Directory Certificate Services with automatic certificate enrollment
-* A local `ca_chain.pem` file containing the root CA certificate
-* Child hosts joined to the domain
-* WinRM HTTPS listeners using certificates issued by AD CS
-
-> [!NOTE]
-> Although Vagrant boxes are created in parallel, if dc01 is included,
-> Ansible provisioning ensures it runs first. A marker file is created at
-> `.vagrant/markers/dc_ready`. When dc01 is destroyed, this marker is cleaned up.
-
-> [!IMPORTANT]
-> When destroying the controller instance, always use `vagrant destroy`.
-> The marker cleanup logic runs as an after trigger in the Vagrantfile.
-
-To bring up standalone Windows boxes without provisioning
+Bring up multiple hosts:
 
 ```sh
-vagrant up win2022 --no-provision
+vagrant up domain-con-01 win-cluster-n01 --provision
 ```
 
-You can also target inventory groups using `VAGRANT_GROUP`
+Select targets with `VAGRANT_GROUP`:
 
 ```sh
-VAGRANT_GROUP=linux \
-vagrant up --no-provision
+VAGRANT_GROUP=linux vagrant up --provision
+VAGRANT_GROUP=control_node vagrant up --provision
+VAGRANT_GROUP=domain_controller,domain_members vagrant up --provision
 ```
 
-`VAGRANT_GROUP` supports sub-groups and individual hosts as well
+Pass raw Ansible flags with `ANSIBLE_EXTRA_ARGS`:
 
 ```sh
-VAGRANT_GROUP=controller,domain_children,ubuntu24 \
-vagrant up --provision
+ANSIBLE_EXTRA_ARGS="-vv --forks=2" vagrant up domain-con-01 --provision
 ```
 
-In addition to Vagrant options and `VAGRANT_GROUP`, you can pass extra flags
-using `ANSIBLE_EXTRA_ARGS`. These arguments are passed straight through to
-ansible-playbook, so, ideally any valid `ansible-playbook` option should work.
-
-For example
+Show the custom Vagrantfile help:
 
 ```sh
-ANSIBLE_EXTRA_ARGS="-vv --forks=2" \
-VAGRANT_GROUP=windows \
-vagrant up --provision
+vagrant --custom-help
 ```
-
-> [!NOTE]
-> For linux boxes, if you run provisioning directly using `ansible-playbook`
-> instead of `vagrant provision`, you may have to specify the private key
-> explicitly. It is usually located at `.vagrant/machines/[box]/libvirt/private_key`.
-
-> [!WARNING]
-> Windows boxes take much longer to download and provision than Linux boxes.
-> Some patience helps here.
