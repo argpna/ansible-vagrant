@@ -1,7 +1,0 @@
----
-- name: set up winfsp, virtio, spice guest-tools, openssh server etc on windows hosts
-  hosts: windows
-  gather_facts: false
-
-  roles:
-    - role: guest-tools
