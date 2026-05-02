@@ -1,0 +1,56 @@
+---
+- name: import libvirt lab network playbook
+  ansible.builtin.import_playbook: libvirt-host-network.yml
+  tags:
+    - never
+    - libvirt_host_network
+
+- name: import controller node playbook
+  ansible.builtin.import_playbook: controller-node.yml
+  tags: controller_node
+
+- name: import linux base playbook
+  ansible.builtin.import_playbook: linux-base.yml
+  tags: linux_base
+
+- name: import windows domain controller playbook
+  ansible.builtin.import_playbook: windows-domain-controller.yml
+  tags: domain_controller
+
+- name: import windows domain members playbook
+  ansible.builtin.import_playbook: windows-domain-members.yml
+  tags: domain_members
+
+- name: import windows certificates playbook
+  ansible.builtin.import_playbook: windows-certificates.yml
+  tags: windows_certificate
+
+- name: import windows cluster witness playbook
+  ansible.builtin.import_playbook: windows-failover-cluster.yml
+  tags:
+    - never
+    - windows_failover_cluster
+
+- name: import libvirt host shares playbook
+  ansible.builtin.import_playbook: libvirt-host-share.yml
+  tags:
+    - never
+    - libvirt_host_share
+
+- name: import windows guest tools playbook
+  ansible.builtin.import_playbook: windows-guest-tools.yml
+  tags:
+    - never
+    - windows_guest_tools
+
+- name: import windows sql server playbook
+  ansible.builtin.import_playbook: windows-sql-server.yml
+  tags:
+    - never
+    - windows_sql_server
+
+- name: import windows openssh playbook
+  ansible.builtin.import_playbook: windows-openssh.yml
+  tags:
+    - never
+    - windows_openssh

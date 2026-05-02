@@ -1,0 +1,74 @@
+---
+- name: configure ad cs and winrm certificates on the domain controller
+  hosts: domain_controller
+  gather_facts: false
+
+  pre_tasks:
+    - name: require exactly one inventory host in the domain_controller group
+      ansible.builtin.assert:
+        that:
+          - groups['domain_controller'] | default([]) | length == 1
+        fail_msg: "Inventory must define exactly one host in group 'domain_controller'."
+
+    - name: wait for domain controller connection
+      ansible.builtin.wait_for_connection:
+
+  roles:
+    - role: windows_adcs
+      when: certificates.adcs_enabled | bool
+
+    - role: windows_winrm_cert
+      vars:
+        windows_is_domain_controller: true
+      when: certificates.adcs_enabled | bool and
+            certificates.winrm_listener_cert_mode == 'adcs_autoenroll'
+
+  post_tasks:
+    - name: write the CA chain locally
+      delegate_to: localhost
+      ansible.builtin.copy:
+        content: "{{ windows_adcs_ca_chain_pem }}"
+        dest: "{{ playbook_dir }}/../ca_chain.pem"
+        mode: "0644"
+      when: certificates.adcs_enabled | bool
+
+- name: configure winrm certificates on domain member hosts
+  hosts: domain_members
+  gather_facts: false
+
+  pre_tasks:
+    - name: require exactly one inventory host in the domain_controller group
+      ansible.builtin.assert:
+        that:
+          - groups['domain_controller'] | default([]) | length == 1
+        fail_msg: "Inventory must define exactly one host in group 'domain_controller'."
+
+    - name: wait for domain controller connection
+      ansible.builtin.wait_for_connection:
+      delegate_to: "{{ groups['domain_controller'][0] }}"
+
+    - name: query the Active Directory Certificate Services service on the domain controller
+      ansible.windows.win_service_info:
+        name: CertSvc
+      delegate_to: "{{ groups['domain_controller'][0] }}"
+      register: windows_domain_controller_adcs_service
+
+    - name: require the AD CS service to be present and running on the domain controller
+      ansible.builtin.assert:
+        that:
+          - windows_domain_controller_adcs_service.exists | default(false)
+          - windows_domain_controller_adcs_service.services | default([]) | length > 0
+          - windows_domain_controller_adcs_service.services[0].state == 'started'
+        fail_msg: >-
+          Active Directory Certificate Services is not running on
+          {{ groups['domain_controller'][0] }}.
+
+    - name: wait for member host connection
+      ansible.builtin.wait_for_connection:
+
+  roles:
+    - role: windows_winrm_cert
+      vars:
+        windows_is_domain_controller: false
+      when: certificates.adcs_enabled | bool and
+            certificates.winrm_listener_cert_mode == 'adcs_autoenroll'

@@ -1,0 +1,17 @@
+---
+- name: prepare generic linux hosts
+  hosts: linux_hosts
+  become: true
+  gather_facts: true
+  module_defaults:
+    ansible.builtin.apt:
+      update_cache: true
+      cache_valid_time: 3600
+
+  pre_tasks:
+    - name: wait for linux host connection
+      ansible.builtin.wait_for_connection:
+
+  roles:
+    - role: linux_base
+    - role: linux_kerberos_client

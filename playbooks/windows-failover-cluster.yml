@@ -1,0 +1,118 @@
+---
+- name: prepare the file share witness on the domain controller
+  hosts: domain_controller
+  gather_facts: false
+
+  pre_tasks:
+    - name: require exactly one inventory host in the domain_controller group
+      ansible.builtin.assert:
+        that:
+          - groups['domain_controller'] | default([]) | length == 1
+        fail_msg: "Inventory must define exactly one host in group 'domain_controller'."
+
+    - name: load SQL cluster settings for failover cluster workflow
+      ansible.builtin.include_vars:
+        file: "{{ inventory_dir }}/group_vars/mssql_windows_ag.yml"
+
+    - name: require the configured witness host to match the domain controller
+      ansible.builtin.assert:
+        that:
+          - mssql.cluster.witness.host == inventory_hostname
+        fail_msg: >-
+          mssql.cluster.witness.host must match the domain controller host for
+          the failover cluster workflow.
+
+    - name: wait for domain controller connection
+      ansible.builtin.wait_for_connection:
+
+  tasks:
+    - name: prepare the file share witness
+      ansible.builtin.include_role:
+        name: windows_failover_cluster
+        tasks_from: file_share_witness.yml
+      vars:
+        windows_failover_cluster_witness_share_state: present
+      when: (windows_failover_cluster_state | default('present')) == 'present'
+
+- name: prepare MSSQL Windows cluster hosts for Windows Failover Clustering
+  hosts: mssql_windows_ag
+  gather_facts: false
+
+  pre_tasks:
+    - name: require at least two MSSQL Windows cluster hosts in inventory
+      ansible.builtin.assert:
+        that:
+          - groups['mssql_windows_ag'] | default([]) | length >= 2
+        fail_msg: "Inventory must define at least two hosts in group 'mssql_windows_ag'."
+
+    - name: wait for MSSQL Windows cluster host connection
+      ansible.builtin.wait_for_connection:
+
+  tasks:
+    - name: prepare MSSQL Windows cluster hosts for failover clustering prerequisites
+      ansible.builtin.include_role:
+        name: windows_failover_cluster
+        tasks_from: prereqs.yml
+      when: (windows_failover_cluster_state | default('present')) == 'present'
+
+- name: create the Windows Failover Cluster for MSSQL Windows cluster hosts
+  hosts: mssql_windows_ag[0]
+  gather_facts: false
+
+  pre_tasks:
+    - name: require at least two MSSQL Windows cluster hosts in inventory
+      ansible.builtin.assert:
+        that:
+          - groups['mssql_windows_ag'] | default([]) | length >= 2
+        fail_msg: "Inventory must define at least two hosts in group 'mssql_windows_ag'."
+
+    - name: wait for cluster bootstrap node connection
+      ansible.builtin.wait_for_connection:
+
+  tasks:
+    - name: create the failover cluster and configure the file share witness
+      ansible.builtin.include_role:
+        name: windows_failover_cluster
+        tasks_from: create_cluster.yml
+      when: (windows_failover_cluster_state | default('present')) == 'present'
+
+    - name: remove the failover cluster
+      ansible.builtin.include_role:
+        name: windows_failover_cluster
+        tasks_from: destroy_cluster.yml
+      when: (windows_failover_cluster_state | default('present')) == 'absent'
+
+- name: remove the file share witness on the domain controller
+  hosts: domain_controller
+  gather_facts: false
+
+  pre_tasks:
+    - name: require exactly one inventory host in the domain_controller group
+      ansible.builtin.assert:
+        that:
+          - groups['domain_controller'] | default([]) | length == 1
+        fail_msg: "Inventory must define exactly one host in group 'domain_controller'."
+
+    - name: load SQL cluster settings for witness cleanup
+      ansible.builtin.include_vars:
+        file: "{{ inventory_dir }}/group_vars/mssql_windows_ag.yml"
+
+    - name: require the configured witness host to match the domain controller
+      ansible.builtin.assert:
+        that:
+          - mssql.cluster.witness.host == inventory_hostname
+        fail_msg: >-
+          mssql.cluster.witness.host must match the domain controller host for
+          the failover cluster workflow.
+
+    - name: wait for domain controller connection
+      ansible.builtin.wait_for_connection:
+
+  tasks:
+    - name: remove the file share witness share
+      ansible.builtin.include_role:
+        name: windows_failover_cluster
+        tasks_from: file_share_witness.yml
+      vars:
+        windows_failover_cluster_witness_share_state: absent
+      when: (windows_failover_cluster_state | default('present')) == 'absent'

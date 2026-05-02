@@ -1,0 +1,7 @@
+---
+- name: install optional windows guest tools
+  hosts: windows
+  gather_facts: false
+
+  roles:
+    - role: windows_guest_tools

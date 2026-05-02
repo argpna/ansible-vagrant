@@ -1,0 +1,33 @@
+---
+- name: provision the windows domain controller
+  hosts: domain_controller
+  gather_facts: false
+
+  pre_tasks:
+    - name: require exactly one inventory host in the domain_controller group
+      ansible.builtin.assert:
+        that:
+          - groups['domain_controller'] | default([]) | length == 1
+        fail_msg: "Inventory must define exactly one host in group 'domain_controller'."
+
+    - name: wait for domain controller connection
+      ansible.builtin.wait_for_connection:
+
+    - name: resolve the Ansible windows adapter
+      ansible.builtin.include_role:
+        name: windows_common
+        tasks_from: find_connection_adapter.yml
+
+    - name: keep DNS registration only on the connection adapter
+      ansible.builtin.include_role:
+        name: windows_common
+        tasks_from: configure_dns_registration.yml
+
+  roles:
+    - role: windows_domain_controller
+
+  post_tasks:
+    - name: remove unexpected DNS A records for the domain controller hostname
+      ansible.builtin.include_role:
+        name: windows_common
+        tasks_from: cleanup_host_dns_records.yml

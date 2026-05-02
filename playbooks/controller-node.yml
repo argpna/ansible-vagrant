@@ -1,0 +1,25 @@
+---
+- name: bootstrap the linux control node
+  hosts: control_node
+  become: true
+  gather_facts: true
+  module_defaults:
+    ansible.builtin.apt:
+      update_cache: true
+      cache_valid_time: 3600
+
+  pre_tasks:
+    - name: assert exactly one inventory host in the control_node group
+      ansible.builtin.assert:
+        that:
+          - groups['control_node'] | default([]) | length == 1
+        fail_msg: "Inventory must define exactly one host in group 'control_node'."
+
+    - name: wait for control node connection
+      ansible.builtin.wait_for_connection:
+
+  roles:
+    - role: linux_base
+    - role: linux_kerberos_client
+    - role: controller_python
+    - role: controller_ansible

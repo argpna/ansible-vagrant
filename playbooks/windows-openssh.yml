@@ -1,0 +1,10 @@
+---
+- name: install and configure windows openssh server
+  hosts: windows
+  gather_facts: false
+  become: true
+  become_method: runas
+  become_user: SYSTEM
+
+  roles:
+    - role: windows_openssh

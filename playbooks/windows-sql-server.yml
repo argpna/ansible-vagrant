@@ -1,0 +1,83 @@
+---
+- name: install SQL Server on MSSQL Windows cluster hosts
+  hosts: mssql_windows_ag
+  gather_facts: false
+
+  pre_tasks:
+    - name: require at least two MSSQL Windows cluster hosts in inventory
+      ansible.builtin.assert:
+        that:
+          - groups['mssql_windows_ag'] | default([]) | length >= 2
+        fail_msg: "Inventory must define at least two hosts in group 'mssql_windows_ag'."
+
+    - name: wait for MSSQL Windows cluster host connection
+      ansible.builtin.wait_for_connection:
+
+    - name: gather Windows environment facts
+      ansible.windows.setup:
+        gather_subset:
+          - env
+
+  tasks:
+    - name: install SQL Server from staged installation media
+      block:
+        - name: set SQL Server installation media staging paths
+          ansible.builtin.set_fact:
+            windows_sql_server_media_stage_path: >-
+              {{ ansible_env.TEMP }}\{{ windows_sql_server.media_stage_directory_name | default('sql-server-media') }}
+            windows_sql_server_source_iso_path: >-
+              {{ windows_sql_server.media_iso_source_dir }}{{ windows_sql_server.media_iso_filename }}
+            windows_sql_server_staged_iso_path: >-
+              {{ ansible_env.TEMP }}\{{ windows_sql_server.media_stage_directory_name | default('sql-server-media') }}\{{ windows_sql_server.media_iso_filename }}
+
+        - name: inspect SQL Server installation ISO source
+          ansible.windows.win_stat:
+            path: "{{ windows_sql_server_source_iso_path }}"
+          register: windows_sql_server_source_iso_stat
+
+        - name: require SQL Server installation ISO source to exist
+          ansible.builtin.assert:
+            that:
+              - windows_sql_server_source_iso_stat.stat.exists
+            fail_msg: >-
+              SQL Server ISO was not found at {{ windows_sql_server_source_iso_path }}.
+              Ensure the SQL media host share has already been attached and mounted
+              on {{ inventory_hostname }} before running this playbook.
+
+        - name: ensure SQL Server installation media staging directory exists
+          ansible.windows.win_file:
+            path: "{{ windows_sql_server_media_stage_path }}"
+            state: directory
+
+        - name: copy SQL Server installation ISO to local Windows temp
+          community.windows.win_robocopy:
+            src: "{{ windows_sql_server.media_iso_source_dir }}"
+            dest: "{{ windows_sql_server_media_stage_path }}"
+            flags: "{{ windows_sql_server.media_iso_filename }}"
+
+        - name: mount staged SQL Server installation ISO
+          community.windows.win_disk_image:
+            image_path: "{{ windows_sql_server_staged_iso_path }}"
+            state: present
+          register: windows_sql_server_media_mount
+
+        - name: use mounted SQL Server media for installation
+          ansible.builtin.set_fact:
+            windows_sql_server: >-
+              {{
+                windows_sql_server |
+                combine({'media_path': windows_sql_server_media_mount.mount_paths[0]}, recursive=True)
+              }}
+
+        - name: install SQL Server
+          ansible.builtin.include_role:
+            name: windows_sql_server
+
+      always:
+        - name: dismount staged SQL Server installation ISO
+          community.windows.win_disk_image:
+            image_path: "{{ windows_sql_server_staged_iso_path }}"
+            state: absent
+          when:
+            - windows_sql_server.dismount_media_after_install | default(true)
+            - windows_sql_server_staged_iso_path is defined
