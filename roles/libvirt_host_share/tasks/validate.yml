@@ -45,10 +45,10 @@
     that:
       - item.stat.exists
       - item.stat.isdir
-    fail_msg: "Host share source path missing or not a directory: {{ item.stat.path }}"
+    fail_msg: "Host share source path missing or not a directory: {{ item.item.source }}"
   loop: "{{ libvirt_host_share_source_stats.results }}"
   loop_control:
-    label: "{{ item.stat.path | default('unknown') }}"
+    label: "{{ item.item.source | default('unknown') }}"
 
 - name: resolve libvirt domain name from vagrant id file when available
   ansible.builtin.set_fact:
