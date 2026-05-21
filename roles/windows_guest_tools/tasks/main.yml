@@ -62,6 +62,11 @@
           windows_guest_tools_task_stat.state.status != 'TASK_STATE_RUNNING')
       changed_when: false
 
+    - name: Reboot to clear pending-restart flags
+      ansible.windows.win_reboot:
+        reboot_timeout: 300
+        post_reboot_delay: 5
+
   always:
     - name: Remove scheduled task
       community.windows.win_scheduled_task:
