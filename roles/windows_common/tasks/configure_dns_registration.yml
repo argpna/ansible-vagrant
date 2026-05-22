@@ -1,5 +1,5 @@
 ---
 - name: keep DNS registration only on the connection adapter
   win_dns_registration:
-    adapter_name: "{{ windows_connection_adapter_name }}"
-  register: windows_dns_registration
+    adapter_name: "{{ windows_common_connection_adapter_name }}"
+  register: windows_common_dns_registration

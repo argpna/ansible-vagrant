@@ -2,7 +2,7 @@
 - name: assert required domain controller settings are present
   ansible.builtin.assert:
     that:
-      - windows_connection_adapter_name is defined
+      - windows_common_connection_adapter_name is defined
       - domain.name is defined
       - domain.safe_mode_password is defined
       - domain.admin.username is defined
@@ -10,7 +10,7 @@
 
 - name: point the controller adapter DNS at localhost
   ansible.windows.win_dns_client:
-    adapter_name: "{{ windows_connection_adapter_name }}"
+    adapter_name: "{{ windows_common_connection_adapter_name }}"
     ipv4_addresses: 127.0.0.1
 
 - name: promote the host to a domain controller

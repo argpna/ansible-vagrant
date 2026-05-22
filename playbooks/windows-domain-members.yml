@@ -1,4 +1,9 @@
 ---
+# Usage examples:
+#   ansible-playbook playbooks/windows-domain-members.yml
+#   ansible-playbook playbooks/windows-domain-members.yml --limit mssql_windows_matrix
+#   ansible-playbook playbooks/windows-domain-members.yml --limit win-cluster-n01
+#
 - name: join windows member hosts to the domain
   hosts: domain_members
   gather_facts: false

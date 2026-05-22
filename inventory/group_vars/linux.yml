@@ -3,6 +3,13 @@ ansible_user: vagrant
 ansible_port: 22
 ansible_ssh_private_key_file: "{{ inventory_dir }}/../.vagrant/machines/{{ inventory_hostname }}/libvirt/private_key"
 
+controller:
+  admin_user:
+    name: ansible
+    group: ansible-admin
+    password_hash: "$6$OpPwep0n4zujElhs$gWIk6yiEIYVg9h8rcs.Nq8fgas0TSgC/3Wc.Y2SHhvtFfO74Kc63RNaZBY119UAc7kfg1MEbkCIzTod2ksedp1"
+    authorized_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7zoTeDWENzfCBvlqpEJoQdsGHGlP/CeC1UIpaB31WJWnkmWSrHltzw8xVD6m2dn0ZGZxlqGX1awCnWao2zQPAYpOAuReTV7RpT9+ehSfREwbGMYO22kqSITw19ZTCvqZSM1bxirdgreJ7cM7/wFcVc7WUphccFA72V2giNhyNCQU5IQbBGIjODsE6Tmfk4DUkLwRjf9GOriJQY7L11Vn1Of8bRfqKv7E7s6QpvVnnNty2CsocGR07CGQDCL379+5TQJElPsLSajk/TV42+yUDdmYupugtvOkSaBlQLb2wbP6WMmS5JTPLVgHVQKF23kRhW/K0PIbyEecoLDze1dQ5"  # noqa yaml[line-length]
+
 linux_defaults:
   provider_options:
     memory_backing: memfd

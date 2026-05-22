@@ -124,4 +124,5 @@
       - altinstall
   args:
     chdir: "{{ controller_python_source_dir }}"
+    creates: "{{ controller_python_executable }}"
   when: controller_python_rebuild_required

@@ -1,14 +1,10 @@
 ---
 # Usage examples:
 #   ansible-playbook playbooks/libvirt-host-network.yml
-#   NETWORK_PROFILE=sql-ag ansible-playbook playbooks/libvirt-host-network.yml
 #   ansible-playbook playbooks/libvirt-host-network.yml -e libvirt_host_network_redefine=true
 #   ansible-playbook playbooks/libvirt-host-network.yml -e libvirt_host_network_state=absent
 #   ansible-playbook playbooks/libvirt-host-network.yml -e libvirt_host_network_state=purged
-#
-# The default path uses inventory/group_vars/all/network.yml to resolve the
-# active lab network profile and generate matching libvirt network XML.
-#
+
 - name: manage the host-side libvirt lab network
   hosts: localhost
   connection: local

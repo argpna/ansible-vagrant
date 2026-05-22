@@ -1,11 +1,18 @@
 ---
+# Usage examples:
+#   ansible-playbook playbooks/libvirt-host-share.yml
+#   ansible-playbook playbooks/libvirt-host-share.yml --limit mssql_windows_matrix
+#   ansible-playbook playbooks/libvirt-host-share.yml --limit win2022-sql2022
+#
 - name: attach libvirt host shares for Windows guests
-  hosts: mssql_windows_ag
+  hosts: windows
   gather_facts: false
   become: false
 
   tasks:
     - name: attach host shares on the libvirt host
+      delegate_to: localhost
+      become: true
       when:
         - windows_extras.host_shares | default([]) | length > 0
       block:
@@ -14,5 +21,3 @@
             name: libvirt_host_share
           vars:
             libvirt_host_share_list: "{{ windows_extras.host_shares | default([]) }}"
-      delegate_to: localhost
-      become: true

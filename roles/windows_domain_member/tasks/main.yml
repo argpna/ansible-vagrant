@@ -2,7 +2,7 @@
 - name: assert required domain member settings are present
   ansible.builtin.assert:
     that:
-      - windows_connection_adapter_name is defined
+      - windows_common_connection_adapter_name is defined
       - domain.controller_ip is defined
       - domain.name is defined
       - domain.admin.upn is defined
@@ -10,7 +10,7 @@
 
 - name: point the member adapter DNS at the domain controller
   ansible.windows.win_dns_client:
-    adapter_names: "{{ windows_connection_adapter_name }}"
+    adapter_names: "{{ windows_common_connection_adapter_name }}"
     ipv4_addresses: "{{ domain.controller_ip }}"
 
 - name: join the host to the domain

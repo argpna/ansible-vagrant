@@ -1,52 +1,72 @@
 require 'open3'
 
-require_relative 'network'
-
 module NetworkValidator
   module_function
 
-  def validate!(all_vars, profile_name: nil, network_names: nil)
-    profiles = all_vars['network_profiles'] || {}
-    profile = profile_name || VagrantNetwork.network_profile(all_vars['network_profile'] || 'default')
-    selected = profiles[profile]
-    raise "NETWORK_PROFILE=#{profile.inspect} is not defined in network_profiles" unless selected.is_a?(Hash)
+  def network_statuses(all_vars, network_names: nil)
+    expected_networks = (network_names || (all_vars['networks'] || {}).keys).map(&:to_s).uniq
+    networks = all_vars['networks'] || {}
 
-    expected_networks = (network_names || selected['networks'] || []).map(&:to_s).uniq
-    return if expected_networks.empty?
-
-    expected_networks.each do |network_name|
-      validate_network!(all_vars['networks'] || {}, profile, network_name)
+    expected_networks.each_with_object({}) do |network_name, out|
+      out[network_name] = inspect_network(networks, network_name)
     end
   end
 
-  def validate_network!(networks, profile_name, network_name)
+  def validate!(all_vars, network_names: nil)
+    network_statuses(all_vars, network_names: network_names).each do |network_name, status|
+      next if status[:state] == :ok
+
+      raise network_error_message(network_name, status)
+    end
+  end
+
+  def inspect_network(networks, network_name)
     expected = networks[network_name]
-    raise "NETWORK_PROFILE=#{profile_name.inspect} references unknown lab network #{network_name.inspect}" unless expected.is_a?(Hash)
+    return { state: :unknown } unless expected.is_a?(Hash)
 
     expected = expected.merge('forward_mode' => expected['forward_mode'] || 'route')
-
     stdout, stderr, status = Open3.capture3('virsh', 'net-dumpxml', network_name)
     unless status.success?
-      raise <<~MSG
-        Missing libvirt network #{network_name.inspect} for NETWORK_PROFILE=#{profile_name.inspect}.
-        Run:
-          NETWORK_PROFILE=#{profile_name} ansible-playbook playbooks/libvirt-host-network.yml
-        virsh error:
-          #{stderr.strip}
-      MSG
+      return {
+        state: :missing,
+        stderr: stderr.strip
+      }
     end
 
     failed = failed_checks(stdout, expected)
-    return if failed.empty?
+    return { state: :ok } if failed.empty?
 
-    raise <<~MSG
-      Libvirt network #{network_name.inspect} exists but does not match inventory for NETWORK_PROFILE=#{profile_name.inspect}.
-      Failed checks: #{failed.join(', ')}
-      Expected CIDR: #{expected['cidr']}
-      Run:
-        NETWORK_PROFILE=#{profile_name} ansible-playbook playbooks/libvirt-host-network.yml -e libvirt_host_network_redefine=true
-      Halt guests attached to #{network_name.inspect} first if needed.
-    MSG
+    {
+      state: :mismatch,
+      failed_checks: failed,
+      cidr: expected['cidr']
+    }
+  end
+
+  def network_error_message(network_name, status)
+    case status[:state]
+    when :unknown
+      "Unknown lab network #{network_name.inspect} in inventory/group_vars/all/network.yml"
+    when :missing
+      <<~MSG
+        Missing libvirt network #{network_name.inspect}.
+        Run:
+          ansible-playbook playbooks/libvirt-host-network.yml
+        virsh error:
+          #{status[:stderr]}
+      MSG
+    when :mismatch
+      <<~MSG
+        Libvirt network #{network_name.inspect} exists but does not match inventory.
+        Failed checks: #{Array(status[:failed_checks]).join(', ')}
+        Expected CIDR: #{status[:cidr]}
+        Run:
+          ansible-playbook playbooks/libvirt-host-network.yml -e libvirt_host_network_redefine=true
+        Halt guests attached to #{network_name.inspect} first if needed.
+      MSG
+    else
+      "Unexpected libvirt network status for #{network_name.inspect}: #{status.inspect}"
+    end
   end
 
   def failed_checks(xml, expected)

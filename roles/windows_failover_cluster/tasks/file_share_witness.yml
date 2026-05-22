@@ -48,14 +48,14 @@
         Name = $share.Name
         Path = $share.Path
       } | ConvertTo-Json -Compress
-  register: windows_cluster_witness_share
+  register: windows_failover_cluster_witness_share
   changed_when: false
   when: (windows_failover_cluster_witness_share_state | default('present')) == 'present'
 
 - name: assert the witness share path matches the configured directory
   ansible.builtin.assert:
     that:
-      - (windows_cluster_witness_share.output[0] | from_json).Path == mssql.cluster.witness.directory
+      - (windows_failover_cluster_witness_share.output[0] | from_json).Path == mssql.cluster.witness.directory
     fail_msg: >-
       Witness share {{ mssql.cluster.witness.share_name }} does not point to
       {{ mssql.cluster.witness.directory }}.

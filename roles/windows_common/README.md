@@ -22,7 +22,7 @@ intended lab IP.
 ### Mandatory Variables
 
 * `ansible_host`: The host IP address used to identify the connection adapter.
-* `windows_connection_adapter_name`: Required by the DNS-registration helper after
+* `windows_common_connection_adapter_name`: Required by the DNS-registration helper after
   the connection adapter has been resolved.
 * `domain.name`: Required by the DNS cleanup helper.
 * `domain.admin.upn`: Required by the DNS cleanup helper.

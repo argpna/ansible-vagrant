@@ -1,5 +1,5 @@
 ---
-windows_sql_server:
+windows_sql_server:  # noqa var-naming[no-role-prefix]
   state: present
   media_path: null
   instance_name: MSSQLSERVER

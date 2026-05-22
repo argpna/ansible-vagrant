@@ -1,4 +1,9 @@
 ---
+# Usage examples:
+#   ansible-playbook playbooks/windows-sql-server.yml
+#   ansible-playbook playbooks/windows-sql-server.yml --limit mssql_windows_ag
+#   ansible-playbook playbooks/windows-sql-server.yml --limit win-cluster-n01
+#
 - name: install SQL Server on MSSQL Windows cluster hosts
   hosts: mssql_windows_ag
   gather_facts: false
@@ -24,11 +29,18 @@
         - name: set SQL Server installation media staging paths
           ansible.builtin.set_fact:
             windows_sql_server_media_stage_path: >-
-              {{ ansible_env.TEMP }}\{{ windows_sql_server.media_stage_directory_name | default('sql-server-media') }}
+              {{
+                ansible_env.TEMP ~ '\\' ~
+                (windows_sql_server.media_stage_directory_name | default('sql-server-media'))
+              }}
             windows_sql_server_source_iso_path: >-
               {{ windows_sql_server.media_iso_source_dir }}{{ windows_sql_server.media_iso_filename }}
             windows_sql_server_staged_iso_path: >-
-              {{ ansible_env.TEMP }}\{{ windows_sql_server.media_stage_directory_name | default('sql-server-media') }}\{{ windows_sql_server.media_iso_filename }}
+              {{
+                ansible_env.TEMP ~ '\\' ~
+                (windows_sql_server.media_stage_directory_name | default('sql-server-media')) ~
+                '\\' ~ windows_sql_server.media_iso_filename
+              }}
 
         - name: inspect SQL Server installation ISO source
           ansible.windows.win_stat:

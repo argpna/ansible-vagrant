@@ -1,12 +1,12 @@
 # -*- mode: ruby -*-
 
+require 'json'
 require 'shellwords'
 
 require_relative 'vagrant/lib/cli'
 require_relative 'vagrant/lib/common'
 require_relative 'vagrant/lib/inventory'
-require_relative 'vagrant/lib/network'
-require_relative 'vagrant/lib/network_validator'
+require_relative 'vagrant/lib/network_options'
 require_relative 'vagrant/lib/provider_options'
 
 ROOT = File.expand_path(File.dirname(__FILE__))
@@ -26,7 +26,6 @@ def usage
 
     Usage:
       VAGRANT_GROUP=<group|host1,host2> vagrant up [args]
-      NETWORK_PROFILE=<default|sql-ag> vagrant up [args]
 
     Ansible:
       ANSIBLE_EXTRA_ARGS="--tags foo -vvv" vagrant up <host>
@@ -48,9 +47,7 @@ raise 'No hosts found in inventory' if resolved_hosts.empty?
 group_env = VagrantCommon.env_str('VAGRANT_GROUP')
 selectors = (group_env || '').split(/[,\s]+/).reject(&:empty?)
 cli_machine_names = VagrantCli.extract_machine_names(ARGV)
-strict_network_topology = VagrantCli.validate_network_topology?(ARGV)
 ansible_provision_requested = VagrantCli.ansible_provision?(ARGV)
-network_profile = VagrantNetwork.network_profile(all_vars['network_profile'] || 'default')
 
 group_targets = if selectors.empty?
   resolved_hosts
@@ -70,8 +67,6 @@ ansible_limit = provision_target_names.join(':')
 ansible_provision_owner = provision_target_names.last
 provision_target_os = provision_target_names.map { |name| resolved_hosts[name]['os'] }.uniq
 
-NetworkValidator.validate!(all_vars, profile_name: network_profile) if strict_network_topology
-
 Vagrant.configure('2') do |config|
   config.vm.synced_folder '.', '/vagrant', disabled: true, id: 'vagrant-root'
 
@@ -86,6 +81,7 @@ Vagrant.configure('2') do |config|
     declared_interface_names = declared_interfaces.map { |network_interface| network_interface['name'] }
     unknown_attached_interfaces = attached_interface_names - declared_interface_names
     attached_interfaces = declared_interfaces.select { |network_interface| attached_interface_names.include?(network_interface['name']) }
+    attached_network_names = attached_interfaces.map { |network_interface| (network_interface['network_name'] || network_interface['network']).to_s }.reject(&:empty?).uniq
 
     raise "Host #{name}: os required" if os.to_s.empty?
     raise "Host #{name}: vagrant_box required" if box.to_s.empty?
@@ -95,6 +91,26 @@ Vagrant.configure('2') do |config|
     config.vm.define name do |vm|
       vm.vm.box = box
       vm.vm.hostname = name
+
+      ensure_networks_cmd = [
+        'ruby',
+        '-I',
+        File.join(ROOT, 'vagrant', 'lib'),
+        '-r',
+        'ensure_host_networks',
+        '-e',
+        'EnsureHostNetworks.run!(ARGV)',
+        *attached_network_names
+      ].map { |part| Shellwords.escape(part) }.join(' ')
+
+      [:up, :reload, :resume].each do |action|
+        vm.trigger.before action do |trigger|
+          trigger.name = "ensure libvirt networks for #{name}"
+          trigger.run = {
+            inline: ensure_networks_cmd
+          }
+        end
+      end
 
       if os == 'windows'
         vm.vm.communicator = 'winrm'
@@ -106,7 +122,7 @@ Vagrant.configure('2') do |config|
       end
 
       attached_interfaces.each do |network_interface|
-        vm.vm.network :private_network, **VagrantNetwork.vagrant_options(name, network_interface)
+        vm.vm.network :private_network, **VagrantNetworkOptions.vagrant_options(name, network_interface)
       end
 
       vm.vm.provider :libvirt do |lv|

@@ -72,7 +72,8 @@
       community.windows.win_scheduled_task:
         name: "{{ windows_guest_tools_task_name }}"
         state: absent
-      ignore_errors: true
+      register: windows_guest_tools_remove_task
+      failed_when: false
 
     - name: Remove temp directory
       ansible.windows.win_file:

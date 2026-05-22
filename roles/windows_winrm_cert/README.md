@@ -22,7 +22,7 @@ issuer is used as an additional filter.
 
 * `domain.name`: The AD DNS domain name.
 * `domain.controller_host`: Inventory name of the domain controller host.
-* `windows_is_domain_controller`: Whether certificate selection should use the domain-controller-specific checks.
+* `windows_winrm_cert_is_domain_controller`: Whether certificate selection should use the domain-controller-specific checks.
 
 ## Examples
 
@@ -33,5 +33,5 @@ issuer is used as an additional filter.
   roles:
     - role: windows_winrm_cert
       vars:
-        windows_is_domain_controller: false
+        windows_winrm_cert_is_domain_controller: false
 ```

@@ -10,7 +10,7 @@ account.
 
 ### Mandatory Variables
 
-* `windows_connection_adapter_name`: The Windows adapter used for domain traffic.
+* `windows_common_connection_adapter_name`: The Windows adapter used for domain traffic.
 * `domain.name`: The AD DNS domain name to create.
 * `domain.safe_mode_password`: The safe mode password for DC promotion.
 * `domain.admin.username`: The initial domain admin account name.

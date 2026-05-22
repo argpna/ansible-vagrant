@@ -1,4 +1,9 @@
 ---
+# Usage examples:
+#   ansible-playbook playbooks/windows-certificates.yml
+#   ansible-playbook playbooks/windows-certificates.yml --limit domain_controller
+#   ansible-playbook playbooks/windows-certificates.yml --limit mssql_windows_ag
+#
 - name: configure ad cs and winrm certificates on the domain controller
   hosts: domain_controller
   gather_facts: false
@@ -19,7 +24,7 @@
 
     - role: windows_winrm_cert
       vars:
-        windows_is_domain_controller: true
+        windows_winrm_cert_is_domain_controller: true
       when: certificates.adcs_enabled | bool and
             certificates.winrm_listener_cert_mode == 'adcs_autoenroll'
 
@@ -69,6 +74,6 @@
   roles:
     - role: windows_winrm_cert
       vars:
-        windows_is_domain_controller: false
+        windows_winrm_cert_is_domain_controller: false
       when: certificates.adcs_enabled | bool and
             certificates.winrm_listener_cert_mode == 'adcs_autoenroll'

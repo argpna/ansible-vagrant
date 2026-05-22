@@ -43,8 +43,9 @@ depending on the base VM Python environment.
 
 > [!NOTE]
 > If you only want to spin up standalone Vagrant hosts and do not need the
-> Ansible control-node workflow or the lab domain setup, simply use `--no-provision`
-> with `vagrant up`.
+> Ansible control-node workflow or the lab domain setup, use `--no-provision`
+> with `vagrant up`. This skips guest provisioning, but Vagrant still ensures
+> the selected host's libvirt networks exist on the host first.
 
 
 ## Inventory Layout
@@ -124,7 +125,7 @@ These roles are normally driven together by
 These roles manage libvirt host-side prerequisites.
 
 * [libvirt_host_network](roles/libvirt_host_network/README.md) -
-  resolves the active network profile from inventory, generates libvirt network
+  reads the configured lab networks from inventory, generates libvirt network
   XML, defines and starts the routed lab networks, and optionally manages
   firewalld plus scoped nftables outbound NAT
 * [libvirt_host_share](roles/libvirt_host_share/README.md) -
@@ -313,6 +314,22 @@ Better validation, error handling etc can be added as needed. The idea is to kee
 Global defaults come from [inventory/group_vars/all](inventory/group_vars/all), with Linux and Windows overlays from [linux.yml](inventory/group_vars/linux.yml) and [windows.yml](inventory/group_vars/windows.yml). Host-level `provider_options` override those merged defaults.
 
 Linux sync-folder defaults currently enable read-write `virtiofs` for the repo root at `/vagrant`.
+
+## Vagrant Networking
+
+Host networking comes from the resolved inventory interface data in
+[inventory/inventory.py](inventory/inventory.py).
+
+When you run `vagrant up <host>`, `vagrant reload <host>`, or `vagrant resume <host>`,
+Vagrant first ensures the libvirt networks attached to that host exist on the
+host system. For example:
+
+* `ansible-con-01` ensures `lab-main`
+* `win-cluster-n01` ensures `mssql-main`
+* `win-cluster-n02` ensures `mssql-dr`
+
+The host-side network definitions are managed by
+[libvirt-host-network.yml](playbooks/libvirt-host-network.yml).
 
 ## Vagrant Provision
 

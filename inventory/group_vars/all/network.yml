@@ -1,22 +1,6 @@
 ---
-network_profile: default
-
-network_profiles:
-  default:
-    networks:
-      - lab-main
-      - mssql-main
-      - mssql-dr
-    manage_firewalld: true
-    outbound_nat: true
-
-  sql-ag:
-    networks:
-      - lab-main
-      - mssql-main
-      - mssql-dr
-    manage_firewalld: true
-    outbound_nat: true
+manage_firewalld: true
+outbound_nat: true
 
 networks:
   lab-main:

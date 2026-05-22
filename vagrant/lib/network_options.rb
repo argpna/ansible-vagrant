@@ -1,9 +1,5 @@
-module VagrantNetwork
+module VagrantNetworkOptions
   module_function
-
-  def network_profile(default_profile = 'default')
-    ENV.fetch('NETWORK_PROFILE', default_profile)
-  end
 
   def vagrant_options(host, interface)
     raise "Host #{host}: interface record required" unless interface.is_a?(Hash)
@@ -15,6 +11,7 @@ module VagrantNetwork
 
     {
       libvirt__network_name: network_name.to_s,
+      libvirt__always_destroy: false,
       mac: mac,
       type: 'dhcp'
     }

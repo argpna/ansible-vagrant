@@ -71,10 +71,21 @@
     ansible_become_user: "{{ domain.admin.upn }}"
     ansible_become_password: "{{ domain.admin.password }}"
 
-- name: wait briefly for cluster services to settle
-  ansible.builtin.pause:
-    seconds: 10
-  when: windows_failover_cluster_create.changed
+- name: wait for the cluster to come online before configuring the witness
+  win_failover_cluster_info:
+    name: "{{ mssql.cluster.name }}"
+  register: windows_failover_cluster_ready_state
+  changed_when: false
+  retries: 6
+  delay: 10
+  until:
+    - windows_failover_cluster_ready_state.exists
+    - windows_failover_cluster_ready_state.cluster_group_state == 'Online'
+  become: true
+  become_method: ansible.builtin.runas
+  vars:
+    ansible_become_user: "{{ domain.admin.upn }}"
+    ansible_become_password: "{{ domain.admin.password }}"
 
 - name: configure the file share witness
   win_failover_cluster_witness:

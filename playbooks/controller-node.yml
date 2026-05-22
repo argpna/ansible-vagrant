@@ -1,4 +1,9 @@
 ---
+# Usage examples:
+#   ansible-playbook playbooks/controller-node.yml
+#   ansible-playbook playbooks/controller-node.yml --limit control_node
+#   ansible-playbook playbooks/controller-node.yml --limit ansible-con-01
+#
 - name: bootstrap the linux control node
   hosts: control_node
   become: true

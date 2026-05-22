@@ -1,4 +1,9 @@
 ---
+# Usage examples:
+#   ansible-playbook playbooks/windows-guest-tools.yml
+#   ansible-playbook playbooks/windows-guest-tools.yml --limit mssql_windows_matrix
+#   ansible-playbook playbooks/windows-guest-tools.yml --limit win2022-sql2022
+#
 - name: install optional windows guest tools
   hosts: windows
   gather_facts: false

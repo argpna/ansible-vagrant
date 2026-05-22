@@ -4,7 +4,7 @@
     zone_name: "{{ domain.name }}"
     record_name: "{{ inventory_hostname }}"
     expected_ip: "{{ ansible_host }}"
-  register: windows_dns_cleanup
+  register: windows_common_dns_cleanup
   delegate_to: "{{ groups['domain_controller'][0] }}"
   become: true
   become_method: ansible.builtin.runas

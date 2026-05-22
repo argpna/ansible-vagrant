@@ -1,4 +1,9 @@
 ---
+# Usage examples:
+#   ansible-playbook playbooks/windows-failover-cluster.yml
+#   ansible-playbook playbooks/windows-failover-cluster.yml --limit domain-con-01:win-cluster-n01:win-cluster-n02
+#   ansible-playbook playbooks/windows-failover-cluster.yml -e windows_failover_cluster_state=absent --limit domain-con-01:win-cluster-n01:win-cluster-n02
+#
 - name: prepare the file share witness on the domain controller
   hosts: domain_controller
   gather_facts: false

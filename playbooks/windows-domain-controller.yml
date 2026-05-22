@@ -1,4 +1,9 @@
 ---
+# Usage examples:
+#   ansible-playbook playbooks/windows-domain-controller.yml
+#   ansible-playbook playbooks/windows-domain-controller.yml --limit domain_controller
+#   ansible-playbook playbooks/windows-domain-controller.yml --limit domain-con-01
+#
 - name: provision the windows domain controller
   hosts: domain_controller
   gather_facts: false

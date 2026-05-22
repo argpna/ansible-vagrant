@@ -1,4 +1,9 @@
 ---
+# Usage examples:
+#   ansible-playbook playbooks/linux-base.yml
+#   ansible-playbook playbooks/linux-base.yml --limit mssql_linux_matrix
+#   ansible-playbook playbooks/linux-base.yml --limit ubuntu2204-sql2022
+#
 - name: prepare generic linux hosts
   hosts: linux_hosts
   become: true

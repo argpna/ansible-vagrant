@@ -1,14 +1,14 @@
 ---
 libvirt_host_network_state: present
-libvirt_host_network_profile: "{{ lookup('ansible.builtin.env', 'NETWORK_PROFILE') | default(network_profile | default('default'), true) }}"
 libvirt_host_network_generate_xml: "{{ networks is defined }}"
 libvirt_host_network_generated_dir: /tmp/mssql-infra-libvirt-networks
 libvirt_host_network_name: lab-main
 libvirt_host_network_xml_path: "{{ playbook_dir }}/../libvirt/{{ libvirt_host_network_name }}.xml"
-libvirt_host_networks: []
+libvirt_host_network_networks: []
+libvirt_host_network_names: []
 libvirt_host_network_autostart: true
 libvirt_host_network_redefine: false
-libvirt_host_network_manage_firewalld: true
+libvirt_host_network_manage_firewalld: "{{ manage_firewalld | default(true) }}"
 libvirt_host_network_firewalld_install: false
 libvirt_host_network_firewalld_start: false
 libvirt_host_network_firewalld_fail_if_unavailable: false
@@ -16,7 +16,7 @@ libvirt_host_network_firewalld_package: firewalld
 libvirt_host_network_firewalld_service: firewalld
 libvirt_host_network_firewalld_zone: libvirt
 libvirt_host_network_firewalld_masquerade: false
-libvirt_host_network_outbound_nat: true
+libvirt_host_network_outbound_nat: "{{ outbound_nat | default(true) }}"
 libvirt_host_network_outbound_nat_table: libvirt_lab_nat
 libvirt_host_network_outbound_nat_service: libvirt-lab-outbound-nat
 libvirt_host_network_outbound_nat_rules_path: /etc/nftables/libvirt-lab-outbound-nat.nft

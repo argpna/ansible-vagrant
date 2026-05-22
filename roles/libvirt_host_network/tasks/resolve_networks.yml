@@ -1,28 +1,23 @@
 ---
-- name: resolve configured lab network profiles
+- name: resolve selected network names
   ansible.builtin.set_fact:
-    libvirt_host_network_profiles: "{{ network_profiles | default({}) }}"
+    libvirt_host_network_selected_names: >-
+      {{
+        (libvirt_host_network_names | default([]) | length > 0)
+        | ternary(
+            libvirt_host_network_names | map('string') | list,
+            networks.keys() | list
+          )
+      }}
+  when: networks is defined
 
-- name: resolve selected lab network profile
-  ansible.builtin.set_fact:
-    libvirt_host_network_selected_profile: "{{ libvirt_host_network_profiles[libvirt_host_network_profile] | default({}) }}"
-
-- name: require selected lab network profile to exist
-  ansible.builtin.assert:
-    that:
-      - libvirt_host_network_selected_profile | length > 0
-    fail_msg: >-
-      NETWORK_PROFILE={{ libvirt_host_network_profile }} is not defined in
-      network_profiles.
-
-- name: require selected profile network names to exist
+- name: require configured network names to exist
   ansible.builtin.assert:
     that:
       - item in networks
     fail_msg: >-
-      NETWORK_PROFILE={{ libvirt_host_network_profile }} references unknown
-      networks item {{ item }}.
-  loop: "{{ libvirt_host_network_selected_profile.networks | default([]) }}"
+      Unknown networks item {{ item }} in inventory/group_vars/all/network.yml.
+  loop: "{{ libvirt_host_network_selected_names | default([]) }}"
   when: networks is defined
 
 - name: derive managed networks from lab network inventory
@@ -40,7 +35,7 @@
       netmask: "{{ network_config.netmask }}"
       dhcp_range: "{{ network_config.dhcp_range | default({}) }}"
       forward_mode: "{{ network_config.forward_mode | default('route') }}"
-  loop: "{{ libvirt_host_network_selected_profile.networks | default([]) }}"
+  loop: "{{ libvirt_host_network_selected_names | default([]) }}"
   loop_control:
     label: "{{ item }}"
   when: networks is defined
@@ -51,9 +46,13 @@
   vars:
     libvirt_host_network_explicit_networks: >-
       {{
-        (libvirt_host_networks | default([]) | length > 0)
+        (
+          libvirt_host_network_networks
+          | default(libvirt_host_networks | default([]))
+          | length > 0
+        )
         | ternary(
-            libvirt_host_networks,
+            libvirt_host_network_networks | default(libvirt_host_networks | default([])),
             [
               {
                 'name': libvirt_host_network_name,
@@ -90,24 +89,38 @@
 
 - name: derive host firewall and outbound NAT policy
   ansible.builtin.set_fact:
-    libvirt_host_network_effective_manage_firewalld: >-
-      {{
-        (libvirt_host_network_selected_profile | default({})).manage_firewalld
-        | default(libvirt_host_network_manage_firewalld)
-        | bool
-      }}
-    libvirt_host_network_effective_outbound_nat: >-
-      {{
-        (libvirt_host_network_selected_profile | default({})).outbound_nat
-        | default(libvirt_host_network_outbound_nat)
-        | bool
-      }}
+    libvirt_host_network_effective_manage_firewalld: "{{ libvirt_host_network_manage_firewalld | bool }}"
+    libvirt_host_network_effective_outbound_nat: "{{ libvirt_host_network_outbound_nat | bool }}"
 
 - name: derive networks that need scoped outbound NAT
   ansible.builtin.set_fact:
     libvirt_host_network_scoped_nat_networks: >-
       {{
-        libvirt_host_network_effective_networks
-        | selectattr('forward_mode', 'equalto', 'route')
-        | list
+        (
+          (
+            networks
+            | default({})
+            | dict2items
+            | map(attribute='value')
+            | rejectattr('forward_mode', 'defined')
+            | list
+          )
+          +
+          (
+            networks
+            | default({})
+            | dict2items
+            | map(attribute='value')
+            | selectattr('forward_mode', 'defined')
+            | selectattr('forward_mode', 'equalto', 'route')
+            | list
+          )
+        )
+        if networks is defined
+        else
+        (
+          libvirt_host_network_effective_networks
+          | selectattr('forward_mode', 'equalto', 'route')
+          | list
+        )
       }}

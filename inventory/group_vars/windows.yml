@@ -1,0 +1,27 @@
+ansible_connection: psrp
+ansible_user: vagrant
+ansible_password: vagrant
+ansible_port: 5986
+# Note: Forced NTLM explicitly for PSRP, using negotiate introduced a
+# fixed connection delay before remoting succeeded. To be re-evaluated
+# at a later time.
+ansible_psrp_auth: ntlm
+ansible_psrp_host: "{{ ansible_host }}"
+ansible_psrp_cert_validation: ignore
+
+windows_defaults:
+  provider_options:
+    graphics:
+      type: spice
+    video_type: qxl
+
+windows_extras:
+  guest_tools:
+    spice_enabled: true
+    winfsp_enabled: true
+    virtio_enabled: true
+  host_shares: []
+  openssh:
+    service_state: started
+    firewall_port: 22
+    default_shell: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe

@@ -1,4 +1,10 @@
 ---
+# Usage examples:
+#   ansible-playbook playbooks/main.yml
+#   ansible-playbook playbooks/main.yml --limit domain-con-01
+#   ansible-playbook playbooks/main.yml --limit mssql_linux_matrix
+#   ansible-playbook playbooks/main.yml --tags windows_guest_tools --limit win2022-sql2022
+#
 - name: import libvirt lab network playbook
   ansible.builtin.import_playbook: libvirt-host-network.yml
   tags:

@@ -9,7 +9,7 @@ host to the domain, reboots if required, and validates domain logon.
 
 ### Mandatory Variables
 
-* `windows_connection_adapter_name`: The Windows adapter used to reach the domain controller.
+* `windows_common_connection_adapter_name`: The Windows adapter used to reach the domain controller.
 * `domain.controller_ip`: The IP address of the domain controller.
 * `domain.name`: The AD DNS domain to join.
 * `domain.admin.upn`: A domain account that can join hosts to the domain.

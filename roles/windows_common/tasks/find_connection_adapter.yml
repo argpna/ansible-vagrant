@@ -2,15 +2,15 @@
 - name: find the connection adapter name for the current host
   win_connection_adapter_info:
     address: "{{ ansible_host }}"
-  register: windows_connection_adapter
+  register: windows_common_connection_adapter
 
 - name: fail when the connection adapter cannot be resolved cleanly
   ansible.builtin.fail:
     msg: >-
       Failed to resolve a single connection adapter for {{ inventory_hostname }}
-  when: windows_connection_adapter.adapter_count != 1
+  when: windows_common_connection_adapter.adapter_count != 1
 
 - name: set the resolved connection adapter name
   ansible.builtin.set_fact:
-    windows_connection_adapter_name: >-
-      {{ windows_connection_adapter.adapter_names[0] }}
+    windows_common_connection_adapter_name: >-
+      {{ windows_common_connection_adapter.adapter_names[0] }}

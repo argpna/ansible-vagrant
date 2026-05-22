@@ -249,18 +249,6 @@ def flatten_hosts(group_graph: dict[str, dict[str, Any]]) -> dict[str, dict[str,
     return hosts
 
 
-def network_profile(all_vars: dict[str, Any]) -> str:
-    """Resolve the active network profile"""
-    default_profile = all_vars.get("network_profile") or "default"
-    return env_str("NETWORK_PROFILE", str(default_profile)) or "default"
-
-
-def network_profiles(all_vars: dict[str, Any]) -> dict[str, Any]:
-    """Return the configured network profiles mapping"""
-    profiles = all_vars.get("network_profiles")
-    return profiles if isinstance(profiles, dict) else {}
-
-
 def network_config(all_vars: dict[str, Any]) -> dict[str, Any]:
     """Return the configured lab networks mapping"""
     networks = all_vars.get("networks")
@@ -360,65 +348,6 @@ def interface_names(interfaces: list[dict[str, Any]]) -> list[str]:
     return [str(interface.get("name")) for interface in interfaces]
 
 
-def attachment_profile_for_host(host_name: str, host: dict[str, Any], profile_name: str) -> list[str]:
-    """Return attached interface names for one network profile.
-
-    Profiles are optional per-host overrides that let the active topology
-    choose a subset of declared interfaces.
-    """
-    profiles = host.get("network_profiles")
-    if profiles is None:
-        return []
-    if not isinstance(profiles, dict):
-        raise InventoryValidationError(f"Host {host_name}: network_profiles must be a mapping when present")
-
-    profile = profiles.get(profile_name)
-    if profile is None:
-        return []
-    if not isinstance(profile, dict):
-        raise InventoryValidationError(f"Host {host_name}: network_profiles[{profile_name!r}] must be a mapping")
-
-    attach = profile.get("attach_interfaces")
-    if not isinstance(attach, list) or not attach:
-        raise InventoryValidationError(
-            f"Host {host_name}: network_profiles[{profile_name!r}].attach_interfaces must be a non-empty list"
-        )
-    return [str(item) for item in attach]
-
-
-def attached_interfaces(
-    host_name: str,
-    host: dict[str, Any],
-    interfaces: list[dict[str, Any]],
-    connection_iface: dict[str, Any],
-    profile_name: str,
-) -> list[dict[str, Any]]:
-    """Resolve the interfaces attached for the active profile.
-
-    When a host has no profile-specific attachment override, all declared
-    interfaces stay attached. Profile overrides must still include the
-    connection interface.
-    """
-    selected_names = attachment_profile_for_host(host_name, host, profile_name)
-    if not selected_names:
-        return copy.deepcopy(interfaces)
-
-    known_names = {str(interface.get("name")) for interface in interfaces}
-    unknown = [name for name in selected_names if name not in known_names]
-    if unknown:
-        raise InventoryValidationError(
-            f"Host {host_name}: profile {profile_name!r} references unknown interface names: {', '.join(unknown)}"
-        )
-
-    selected = [interface for interface in interfaces if str(interface.get("name")) in selected_names]
-    if str(connection_iface.get("name")) not in selected_names:
-        raise InventoryValidationError(
-            f"Host {host_name}: profile {profile_name!r} must include connection interface {connection_iface.get('name')!r}"
-        )
-
-    return copy.deepcopy(selected)
-
-
 def validate_host_contract(host_name: str, host: dict[str, Any], host_groups: list[str], networks: dict[str, Any]) -> list[dict[str, Any]]:
     """Validate one host against the resolved inventory rules.
 
@@ -484,13 +413,7 @@ def build_resolved_inventory() -> tuple[dict[str, dict[str, Any]], dict[str, dic
     group_graph = build_group_graph(inventory, named_group_vars)
     hosts = flatten_hosts(group_graph)
     resolved_hosts: dict[str, dict[str, Any]] = {}
-    profile_name = network_profile(all_vars)
-    profiles = network_profiles(all_vars)
     networks = network_config(all_vars)
-
-    if profile_name not in profiles:
-        expected = ", ".join(sorted(profiles.keys()))
-        raise InventoryValidationError(f"Unknown NETWORK_PROFILE={profile_name!r}, expected one of: {expected}")
 
     for host_name, meta in hosts.items():
         host = copy.deepcopy(meta["vars"])
@@ -498,13 +421,13 @@ def build_resolved_inventory() -> tuple[dict[str, dict[str, Any]], dict[str, dic
         interfaces = validate_host_contract(host_name, host, meta["groups"], networks)
         connection_iface = connection_interface(host_name, interfaces, str(host.get("ansible_host")))
         mgmt = management_interface(host_name, interfaces)
-        attached = attached_interfaces(host_name, host, interfaces, connection_iface, profile_name)
+        attached = copy.deepcopy(interfaces)
         attached_networks = sorted({str(item.get("network")) for item in attached if item.get("network")})
-        profile_networks = {str(item) for item in profiles[profile_name].get("networks", [])}
-        unmanaged_attached_networks = [network for network in attached_networks if network not in profile_networks]
+        configured_networks = set(networks.keys())
+        unmanaged_attached_networks = [network for network in attached_networks if network not in configured_networks]
         if unmanaged_attached_networks:
             raise InventoryValidationError(
-                f"Host {host_name}: attached networks are not managed by NETWORK_PROFILE={profile_name!r}: "
+                f"Host {host_name}: attached networks are not defined in inventory/group_vars/all/network.yml: "
                 f"{', '.join(unmanaged_attached_networks)}"
             )
 
@@ -520,11 +443,9 @@ def build_resolved_inventory() -> tuple[dict[str, dict[str, Any]], dict[str, dic
 
         resolved = merge_hash(host, connection)
         resolved.pop("network_interfaces", None)
-        resolved.pop("network_profiles", None)
         resolved["inventory_hostname"] = host_name
         resolved["ansible_host"] = str(host.get("ansible_host"))
         resolved["mac"] = connection_iface.get("mac") or host.get("mac")
-        resolved["network_profile"] = profile_name
         resolved["interfaces"] = {
             "declared": interfaces,
             "attached": interface_names(attached),
@@ -537,7 +458,6 @@ def build_resolved_inventory() -> tuple[dict[str, dict[str, Any]], dict[str, dic
         resolved_hosts[host_name] = resolved
 
     root_vars = merge_hash(group_graph.get("all", {}).get("vars"), all_vars)
-    root_vars["network_profile"] = profile_name
     group_graph.setdefault("all", {"vars": {}, "hosts": {}, "children": [], "parents": []})["vars"] = root_vars
     return group_graph, resolved_hosts
 
