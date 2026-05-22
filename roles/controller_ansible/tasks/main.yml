@@ -29,8 +29,23 @@
     content: |
       #!/usr/bin/env bash
       set -euo pipefail
+      controller_user="{{ controller.admin_user.name }}"
+      helper_path="/usr/local/bin/enter-ansible-env"
+
+      if [ "${1:-}" = "--as-controller-user" ]; then
+        shift
+      elif [ "$(id -un)" != "${controller_user}" ]; then
+        exec sudo -iu "${controller_user}" "${helper_path}" --as-controller-user "$@"
+      fi
+
       rcfile="$(mktemp)"
       cat > "${rcfile}" <<'EOF'
+      if [ -f /etc/profile ]; then
+        source /etc/profile
+      fi
+      if [ -f "${HOME}/.profile" ]; then
+        source "${HOME}/.profile"
+      fi
       if [ -f /etc/bash.bashrc ]; then
         source /etc/bash.bashrc
       fi
@@ -38,5 +53,8 @@
         source "${HOME}/.bashrc"
       fi
       source "{{ controller.python.venv_path }}/bin/activate"
+      if [ -d /vagrant ]; then
+        cd /vagrant
+      fi
       EOF
       exec /bin/bash --rcfile "${rcfile}" -i
