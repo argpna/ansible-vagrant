@@ -4,6 +4,7 @@
 __pycache__/
 .ansible/
 .archive/
+.venv/
 .codex
 .debug/
 .patches/

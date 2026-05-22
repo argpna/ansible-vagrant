@@ -14,8 +14,41 @@ is omitted.
 * Vagrant
 * libvirt
 * the `vagrant-libvirt` plugin
-* Ansible on the host system running Vagrant
+* Python 3 on the host system running Vagrant
+* Ansible on the host system running Vagrant, either from your existing setup or from the optional repo-local host virtualenv
 
+## Host Ansible Setup
+
+> [!NOTE]
+> If you already have a working host Ansible setup, you can keep using it
+> and skip this step.
+
+This repo includes a minimal host bootstrap that creates `.venv`,
+installs the pinned Ansible and Python packages from
+[requirements-host.txt](requirements-host.txt), and installs the required
+collections from [requirements-host.yml](requirements-host.yml):
+
+```bash
+./bootstrap/setup-host-venv.sh
+source .venv/bin/activate
+```
+
+This host `.venv` is only for bootstrapping and host-side execution. The repo's
+primary Ansible toolchain still lives inside the control node VM at
+`/home/ansible/controller-venv`.
+
+To use that in-VM toolchain after the control node is provisioned:
+
+```bash
+vagrant ssh ansible-con-01
+enter-ansible-env
+```
+
+`enter-ansible-env` switches to the controller admin user and activates the
+control-node virtualenv for that shell.
+
+This repo needs Ansible on the host to drive `vagrant up --provision` and any
+direct host-side `ansible-playbook` runs.
 
 ## Provisioning
 
@@ -215,7 +248,7 @@ which produces:
 * A Python runtime built from source (to avoid distro-specific package related complexities)
 * A control-node virtualenv at `/home/ansible/controller-venv`
 * `ansible`, `pypsrp`, `pywinrm`, `requests-kerberos`, `requests-credssp`, and `gssapi` installed inside that virtualenv
-* `/usr/local/bin/enter-ansible-env`, which starts a shell and activates the control-node virtualenv
+* `/usr/local/bin/enter-ansible-env`, which switches to the controller admin user and activates the control-node virtualenv
 
 Current control-node defaults from [control_node.yml](inventory/group_vars/control_node.yml):
 
