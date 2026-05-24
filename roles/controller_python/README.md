@@ -14,6 +14,10 @@ controller virtualenv with the configured Python line.
 * `controller.admin_user.name`: Owner for the virtualenv parent directory.
 * `controller.admin_user.group`: Group for the virtualenv parent directory.
 
+### Role Variables
+
+* `controller_python_redhat_build_packages`: Build dependency package list for RedHat-family hosts.
+
 ## Examples
 
 ```yml

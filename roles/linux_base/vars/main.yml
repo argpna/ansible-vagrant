@@ -1,0 +1,5 @@
+---
+linux_base_packages:
+  - vim
+  - git
+  - acl

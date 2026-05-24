@@ -1,10 +1,7 @@
-provider_options:
-  memory_backing: memfd
-
 windows_extras:
   host_shares:
     - name: sqlmedia
-      source: /var/lib/libvirt/images/iso/sql2022
+      source: /srv/mssql-media/sql-2022/
       tag: sqlmedia
       guest:
         drive: "S:"

@@ -82,6 +82,7 @@ Vagrant.configure('2') do |config|
     unknown_attached_interfaces = attached_interface_names - declared_interface_names
     attached_interfaces = declared_interfaces.select { |network_interface| attached_interface_names.include?(network_interface['name']) }
     attached_network_names = attached_interfaces.map { |network_interface| (network_interface['network_name'] || network_interface['network']).to_s }.reject(&:empty?).uniq
+    bootstrap_python39 = resolved.dig('vars', 'bootstrap_python39')
 
     raise "Host #{name}: os required" if os.to_s.empty?
     raise "Host #{name}: vagrant_box required" if box.to_s.empty?
@@ -131,6 +132,15 @@ Vagrant.configure('2') do |config|
       end
 
       ProviderOptions.apply_sync_folders(vm, name, provider)
+
+      # for rhel-8
+      if bootstrap_python39
+        vm.vm.provision 'shell', name: 'bootstrap python3.9', inline: <<~SHELL
+          if ! test -x /usr/bin/python3.9; then
+            dnf install -y python39
+          fi
+        SHELL
+      end
 
       if name == ansible_provision_owner
         vm.vm.provision 'ansible' do |ans|

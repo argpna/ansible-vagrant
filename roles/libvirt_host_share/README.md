@@ -40,8 +40,8 @@ backing, because virtiofs depends on that libvirt guest configuration.
       vars:
         libvirt_host_share_list:
           - name: sqlmedia
-            source: /srv/sqlmedia
+            source: /srv/mssql-media/sql-2022/
             tag: sqlmedia
             guest:
-              drive: D:
+              drive: S:
 ```

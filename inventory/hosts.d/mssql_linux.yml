@@ -121,7 +121,8 @@ all:
                       ansible_host: 192.168.131.111
                       mac: 02:56:c0:a8:83:6f
                       vagrant_box: cloud-image/rocky-8
-                      ansible_python_interpreter: /usr/bin/python3
+                      ansible_python_interpreter: /usr/bin/python3.9
+                      bootstrap_python39: true
                       sql_version: 2019
                       provider_options:
                         cpus: 2
@@ -137,7 +138,8 @@ all:
                       ansible_host: 192.168.131.112
                       mac: 02:56:c0:a8:83:70
                       vagrant_box: cloud-image/rocky-8
-                      ansible_python_interpreter: /usr/bin/python3
+                      ansible_python_interpreter: /usr/bin/python3.9
+                      bootstrap_python39: true
                       sql_version: 2022
                       provider_options:
                         cpus: 2

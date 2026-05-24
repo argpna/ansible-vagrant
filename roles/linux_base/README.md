@@ -14,6 +14,10 @@ its SSH key and passwordless sudo access.
 * `controller.admin_user.password_hash`: The hashed password for the admin user.
 * `controller.admin_user.authorized_key`: The SSH public key to add for the admin user.
 
+### Role Variables
+
+* `linux_base_packages`: Baseline package list for both apt and dnf platforms.
+
 ## Examples
 
 ```yml

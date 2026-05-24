@@ -1,0 +1,10 @@
+---
+linux_kerberos_client_dnf_packages:
+  - krb5-devel
+  - krb5-workstation
+  - dnsmasq
+
+linux_kerberos_client_apt_packages:
+  - libkrb5-dev
+  - krb5-user
+  - dnsmasq

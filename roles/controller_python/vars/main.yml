@@ -1,0 +1,15 @@
+---
+controller_python_redhat_build_packages:
+  - bzip2-devel
+  - gcc
+  - libffi-devel
+  - libuuid-devel
+  - make
+  - ncurses-devel
+  - openssl-devel
+  - readline-devel
+  - sqlite-devel
+  - tk-devel
+  - wget
+  - xz-devel
+  - zlib-devel

@@ -1,11 +1,29 @@
 ---
-- name: install baseline linux packages
-  ansible.builtin.package:
-    name:
-      - vim
-      - git
-      - acl
+- name: install baseline linux packages on Debian-family hosts
+  ansible.builtin.apt:
+    name: "{{ linux_base_packages }}"
     state: present
+    update_cache: true
+  when: ansible_os_family == 'Debian'
+
+- name: install baseline linux packages on RedHat-family hosts
+  ansible.builtin.dnf:
+    name: "{{ linux_base_packages }}"
+    state: present
+  when:
+    - ansible_os_family == 'RedHat'
+    - ansible_distribution_major_version | int != 8
+
+- name: install baseline linux packages on RHEL 8 hosts
+  ansible.builtin.raw: >-
+    rpm -q {{ linux_base_packages | join(' ') }} >/dev/null 2>&1 &&
+    echo package-state-present ||
+    { dnf install -y {{ linux_base_packages | join(' ') }} && echo package-state-installed; }
+  register: linux_base_redhat8_packages
+  changed_when: "'package-state-installed' in linux_base_redhat8_packages.stdout"
+  when:
+    - ansible_os_family == 'RedHat'
+    - ansible_distribution_major_version | int == 8
 
 - name: create the controller admin group
   ansible.builtin.group:

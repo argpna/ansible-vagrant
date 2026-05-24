@@ -22,6 +22,11 @@ When `dns.mode` is `local_forwarder`, the role configures `dnsmasq` on
 * `domain.name`: The AD DNS domain forwarded by `dnsmasq`.
 * `dns.upstream_server`: The upstream DNS server for the AD domain.
 
+### Role Variables
+
+* `linux_kerberos_client_dnf_packages`: Kerberos and DNS client packages for dnf platforms.
+* `linux_kerberos_client_apt_packages`: Kerberos and DNS client packages for apt platforms.
+
 ## Examples
 
 ```yml

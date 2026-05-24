@@ -31,22 +31,22 @@
 
 - name: install build prerequisites for controller Python on RedHat-family hosts
   ansible.builtin.dnf:
-    name:
-      - bzip2-devel
-      - gcc
-      - libffi-devel
-      - libuuid-devel
-      - make
-      - ncurses-devel
-      - openssl-devel
-      - readline-devel
-      - sqlite-devel
-      - tk-devel
-      - wget
-      - xz-devel
-      - zlib-devel
+    name: "{{ controller_python_redhat_build_packages }}"
     state: present
-  when: ansible_os_family == 'RedHat'
+  when:
+    - ansible_os_family == 'RedHat'
+    - ansible_distribution_major_version | int != 8
+
+- name: install build prerequisites for controller Python on RHEL 8 hosts
+  ansible.builtin.raw: >-
+    rpm -q {{ controller_python_redhat_build_packages | join(' ') }} >/dev/null 2>&1 &&
+    echo package-state-present ||
+    { dnf install -y {{ controller_python_redhat_build_packages | join(' ') }} && echo package-state-installed; }
+  register: controller_python_redhat8_packages
+  changed_when: "'package-state-installed' in controller_python_redhat8_packages.stdout"
+  when:
+    - ansible_os_family == 'RedHat'
+    - ansible_distribution_major_version | int == 8
 
 - name: derive the controller Python major/minor version
   ansible.builtin.set_fact:

@@ -9,19 +9,26 @@
 
 - name: install kerberos client packages for dnf platforms
   ansible.builtin.dnf:
-    name:
-      - krb5-devel
-      - krb5-workstation
-      - dnsmasq
+    name: "{{ linux_kerberos_client_dnf_packages }}"
     state: present
-  when: ansible_pkg_mgr == 'dnf'
+  when:
+    - ansible_pkg_mgr == 'dnf'
+    - ansible_distribution_major_version | int != 8
+
+- name: install kerberos client packages on RHEL 8 hosts
+  ansible.builtin.raw: >-
+    rpm -q {{ linux_kerberos_client_dnf_packages | join(' ') }} >/dev/null 2>&1 &&
+    echo package-state-present ||
+    { dnf install -y {{ linux_kerberos_client_dnf_packages | join(' ') }} && echo package-state-installed; }
+  register: linux_kerberos_redhat8_packages
+  changed_when: "'package-state-installed' in linux_kerberos_redhat8_packages.stdout"
+  when:
+    - ansible_pkg_mgr == 'dnf'
+    - ansible_distribution_major_version | int == 8
 
 - name: install kerberos client packages for apt platforms
   ansible.builtin.apt:
-    name:
-      - libkrb5-dev
-      - krb5-user
-      - dnsmasq
+    name: "{{ linux_kerberos_client_apt_packages }}"
     update_cache: true
     state: present
   when: ansible_pkg_mgr == 'apt'

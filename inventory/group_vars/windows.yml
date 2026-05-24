@@ -1,3 +1,6 @@
+provider_options:
+  memory_backing: memfd
+
 ansible_connection: psrp
 ansible_user: vagrant
 ansible_password: vagrant
