@@ -1,3 +1,17 @@
+---
+x-mssql_windows_host_shares:
+  sql: &mssql_iso_share
+    guest:
+      drive: "S:"
+    readonly: true
+  ssms_22: &mssql_ssms_share
+    name: ssms-22
+    source: /srv/mssql-media/ssms-22/
+    tag: ssms-22
+    guest:
+      drive: "T:"
+    readonly: true
+
 all:
   children:
     databases:
@@ -9,50 +23,93 @@ all:
                 win-cluster-n01:
                   os: windows
                   ansible_host: 192.168.131.23
-                  mac: 02:56:c0:a8:83:17
+                  mac: 02:56:c0:a8:83:6d
                   vagrant_box: jborean93/WindowsServer2022
                   network_interfaces:
                     - name: sql
                       network: mssql-main
                       ip: 192.168.131.23
-                      mac: 02:56:c0:a8:83:17
+                      mac: 02:56:c0:a8:83:6d
                       role: sql
 
                 win-cluster-n02:
                   os: windows
                   ansible_host: 192.168.132.24
-                  mac: 02:56:c0:a8:84:18
+                  mac: 02:56:c0:a8:84:6e
                   vagrant_box: jborean93/WindowsServer2022
                   network_interfaces:
                     - name: sql
                       network: mssql-dr
                       ip: 192.168.132.24
-                      mac: 02:56:c0:a8:84:18
+                      mac: 02:56:c0:a8:84:6e
                       role: sql
 
             mssql_windows_matrix:
               hosts:
-                win2022-sql2022:
+                win2022-sql2019:
                   os: windows
                   ansible_host: 192.168.131.130
-                  mac: 02:56:c0:a8:83:82
+                  mac: 02:56:c0:a8:83:50
+                  vagrant_box: jborean93/WindowsServer2022
+                  sql_version: 2019
+                  provider_options:
+                    memory_mb: 4096
+                  windows_extras:
+                    host_shares:
+                      - <<: *mssql_iso_share
+                        name: sql-2019
+                        source: /srv/mssql-media/sql-2019/
+                        tag: sql-2019
+                      - *mssql_ssms_share
+                  network_interfaces:
+                    - name: sql
+                      network: mssql-main
+                      ip: 192.168.131.130
+                      mac: 02:56:c0:a8:83:50
+                      role: sql
+
+                win2022-sql2022:
+                  os: windows
+                  ansible_host: 192.168.131.131
+                  mac: 02:56:c0:a8:83:51
                   vagrant_box: jborean93/WindowsServer2022
                   sql_version: 2022
                   provider_options:
                     memory_mb: 4096
                   windows_extras:
                     host_shares:
-                      - name: sqlmedia
+                      - <<: *mssql_iso_share
+                        name: sql-2022
                         source: /srv/mssql-media/sql-2022/
-                        tag: sqlmedia
-                        guest:
-                          drive: "S:"
-                        readonly: true
+                        tag: sql-2022
+                      - *mssql_ssms_share
                   network_interfaces:
                     - name: sql
                       network: mssql-main
-                      ip: 192.168.131.130
-                      mac: 02:56:c0:a8:83:82
+                      ip: 192.168.131.131
+                      mac: 02:56:c0:a8:83:51
+                      role: sql
+
+                win2022-sql2025:
+                  os: windows
+                  ansible_host: 192.168.131.132
+                  mac: 02:56:c0:a8:83:52
+                  vagrant_box: jborean93/WindowsServer2022
+                  sql_version: 2025
+                  provider_options:
+                    memory_mb: 4096
+                  windows_extras:
+                    host_shares:
+                      - <<: *mssql_iso_share
+                        name: sql-2025
+                        source: /srv/mssql-media/sql-2025/
+                        tag: sql-2025
+                      - *mssql_ssms_share
+                  network_interfaces:
+                    - name: sql
+                      network: mssql-main
+                      ip: 192.168.131.132
+                      mac: 02:56:c0:a8:83:52
                       role: sql
 
     windows:

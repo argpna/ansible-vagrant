@@ -68,7 +68,7 @@
       $launchctl = '{{ windows_guest_tools_winfsp_launchctl_path }}'
       {% for share in windows_extras.host_shares %}
       & $launchctl stop virtiofs 'viofs{{ share.guest.drive[0] }}' 2>$null | Out-Null
-      & $launchctl start virtiofs 'viofs{{ share.guest.drive[0] }}' '{{ share.tag }}' '{{ share.guest.drive }}'
+      & $launchctl start virtiofs 'viofs{{ share.guest.drive[0] }}' '{{ share.tag }}' '\\.\{{ share.guest.drive }}'
       {% endfor %}
 
 - name: Install boot-time scheduled task for virtiofs mounts

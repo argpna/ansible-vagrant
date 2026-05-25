@@ -119,7 +119,7 @@ all:
                     rocky8-sql2019:
                       os: linux
                       ansible_host: 192.168.131.111
-                      mac: 02:56:c0:a8:83:6f
+                      mac: 02:56:c0:a8:83:70
                       vagrant_box: cloud-image/rocky-8
                       ansible_python_interpreter: /usr/bin/python3.9
                       bootstrap_python39: true
@@ -130,13 +130,13 @@ all:
                         - name: sql
                           network: mssql-main
                           ip: 192.168.131.111
-                          mac: 02:56:c0:a8:83:6f
+                          mac: 02:56:c0:a8:83:70
                           role: sql
 
                     rocky8-sql2022:
                       os: linux
                       ansible_host: 192.168.131.112
-                      mac: 02:56:c0:a8:83:70
+                      mac: 02:56:c0:a8:83:71
                       vagrant_box: cloud-image/rocky-8
                       ansible_python_interpreter: /usr/bin/python3.9
                       bootstrap_python39: true
@@ -147,13 +147,13 @@ all:
                         - name: sql
                           network: mssql-main
                           ip: 192.168.131.112
-                          mac: 02:56:c0:a8:83:70
+                          mac: 02:56:c0:a8:83:71
                           role: sql
 
                     rocky9-sql2022:
                       os: linux
                       ansible_host: 192.168.131.113
-                      mac: 02:56:c0:a8:83:71
+                      mac: 02:56:c0:a8:83:72
                       vagrant_box: cloud-image/rocky-9
                       ansible_python_interpreter: /usr/bin/python3
                       sql_version: 2022
@@ -163,13 +163,13 @@ all:
                         - name: sql
                           network: mssql-main
                           ip: 192.168.131.113
-                          mac: 02:56:c0:a8:83:71
+                          mac: 02:56:c0:a8:83:72
                           role: sql
 
                     rocky9-sql2025:
                       os: linux
                       ansible_host: 192.168.131.114
-                      mac: 02:56:c0:a8:83:72
+                      mac: 02:56:c0:a8:83:73
                       vagrant_box: cloud-image/rocky-9
                       ansible_python_interpreter: /usr/bin/python3
                       sql_version: 2025
@@ -179,7 +179,7 @@ all:
                         - name: sql
                           network: mssql-main
                           ip: 192.168.131.114
-                          mac: 02:56:c0:a8:83:72
+                          mac: 02:56:c0:a8:83:73
                           role: sql
 
                 mssql_linux_unsupported:
@@ -187,7 +187,7 @@ all:
                     opensuse15-sql2022:
                       os: linux
                       ansible_host: 192.168.131.120
-                      mac: 02:56:c0:a8:83:78
+                      mac: 02:56:c0:a8:83:90
                       vagrant_box: cloud-image/opensuse-leap-15.6
                       ansible_python_interpreter: /usr/bin/python3.11
                       sql_version: 2022
@@ -197,7 +197,7 @@ all:
                         - name: sql
                           network: mssql-main
                           ip: 192.168.131.120
-                          mac: 02:56:c0:a8:83:78
+                          mac: 02:56:c0:a8:83:90
                           role: sql
 
     linux:
