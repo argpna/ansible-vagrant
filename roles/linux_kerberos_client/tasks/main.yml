@@ -20,8 +20,8 @@
     rpm -q {{ linux_kerberos_client_dnf_packages | join(' ') }} >/dev/null 2>&1 &&
     echo package-state-present ||
     { dnf install -y {{ linux_kerberos_client_dnf_packages | join(' ') }} && echo package-state-installed; }
-  register: linux_kerberos_redhat8_packages
-  changed_when: "'package-state-installed' in linux_kerberos_redhat8_packages.stdout"
+  register: linux_kerberos_client_redhat8_packages
+  changed_when: "'package-state-installed' in linux_kerberos_client_redhat8_packages.stdout"
   when:
     - ansible_pkg_mgr == 'dnf'
     - ansible_distribution_major_version | int == 8
