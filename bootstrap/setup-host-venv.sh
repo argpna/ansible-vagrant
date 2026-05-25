@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+COLLECTIONS_PATH="${COLLECTIONS_PATH:-$PROJECT_ROOT/.ansible/collections}"
 
 cd "$PROJECT_ROOT"
 
@@ -20,6 +21,7 @@ rm -rf "$VENV_PATH"
 "$PYTHON_BIN" -m venv "$VENV_PATH"
 "$VENV_PATH/bin/pip" install --upgrade pip --quiet
 "$VENV_PATH/bin/pip" install -r requirements-host.txt
-"$VENV_PATH/bin/ansible-galaxy" collection install -r requirements-host.yml
+mkdir -p "$COLLECTIONS_PATH"
+"$VENV_PATH/bin/ansible-galaxy" collection install -r requirements-host.yml -p "$COLLECTIONS_PATH"
 
 echo "Done. Run 'source $VENV_PATH/bin/activate'"
