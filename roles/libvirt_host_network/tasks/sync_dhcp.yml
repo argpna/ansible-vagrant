@@ -1,0 +1,212 @@
+---
+- name: get current network state for DHCP sync
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - net-info
+      - "{{ libvirt_host_network_item.name }}"
+  register: libvirt_host_network_dhcp_net_info
+  failed_when: false
+  changed_when: false
+
+- name: derive network state flags for DHCP sync
+  ansible.builtin.set_fact:
+    libvirt_host_network_dhcp_net_active: >-
+      {{
+        (
+          libvirt_host_network_dhcp_net_info.stdout | default('')
+          | regex_search('(?im)^Active:\s+yes$')
+        ) is not none
+      }}
+    libvirt_host_network_dhcp_net_persistent: >-
+      {{
+        (
+          libvirt_host_network_dhcp_net_info.stdout | default('')
+          | regex_search('(?im)^Persistent:\s+yes$')
+        ) is not none
+      }}
+
+- name: get current DHCP host entries from network definition
+  ansible.builtin.command:
+    argv: >-
+      {{
+        ['virsh', 'net-dumpxml', libvirt_host_network_item.name]
+        + (['--inactive'] if libvirt_host_network_dhcp_net_persistent | bool else [])
+      }}
+  register: libvirt_host_network_dhcp_live_xml
+  changed_when: false
+
+- name: read desired DHCP host entries from generated network definition
+  ansible.builtin.slurp:
+    src: "{{ libvirt_host_network_item.xml_path }}"
+  register: libvirt_host_network_dhcp_desired_xml_slurp
+
+- name: compute current and desired DHCP host entry maps
+  ansible.builtin.set_fact:
+    libvirt_host_network_dhcp_current: >-
+      {%- set h = {} -%}
+      {%- for tag in libvirt_host_network_dhcp_live_xml.stdout | regex_findall("<host\\b[^>]*/>") -%}
+        {%- set m = tag | regex_search("mac=['\"]([^'\"]+)['\"]", "\\1") -%}
+        {%- set n = tag | regex_search("name=['\"]([^'\"]+)['\"]", "\\1") -%}
+        {%- set i = tag | regex_search("ip=['\"]([^'\"]+)['\"]", "\\1") -%}
+        {%- if m is not none and n is not none and i is not none -%}
+          {%- set _ = h.update({m[0]: {'name': n[0], 'ip': i[0]}}) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ h }}
+    libvirt_host_network_dhcp_desired: >-
+      {%- set h = {} -%}
+      {%- for tag in (libvirt_host_network_dhcp_desired_xml_slurp.content | b64decode) | regex_findall("<host\\b[^>]*/>") -%}
+        {%- set m = tag | regex_search("mac=['\"]([^'\"]+)['\"]", "\\1") -%}
+        {%- set n = tag | regex_search("name=['\"]([^'\"]+)['\"]", "\\1") -%}
+        {%- set i = tag | regex_search("ip=['\"]([^'\"]+)['\"]", "\\1") -%}
+        {%- if m is not none and n is not none and i is not none -%}
+          {%- set _ = h.update({m[0]: {'name': n[0], 'ip': i[0]}}) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ h }}
+
+- name: derive DHCP entries to add, modify, and delete
+  ansible.builtin.set_fact:
+    libvirt_host_network_dhcp_add: >-
+      {%- set r = [] -%}
+      {%- for mac, v in libvirt_host_network_dhcp_desired.items() -%}
+        {%- if mac not in libvirt_host_network_dhcp_current -%}
+          {%- set _ = r.append({'mac': mac, 'name': v.name, 'ip': v.ip}) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ r }}
+    libvirt_host_network_dhcp_modify: >-
+      {%- set r = [] -%}
+      {%- for mac, v in libvirt_host_network_dhcp_desired.items() -%}
+        {%- if mac in libvirt_host_network_dhcp_current -%}
+          {%- set cur = libvirt_host_network_dhcp_current[mac] -%}
+          {%- if v.name != cur.name or v.ip != cur.ip -%}
+            {%- set _ = r.append({'mac': mac, 'name': v.name, 'ip': v.ip}) -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ r }}
+    libvirt_host_network_dhcp_delete: >-
+      {%- set r = [] -%}
+      {%- for mac, v in libvirt_host_network_dhcp_current.items() -%}
+        {%- if mac not in libvirt_host_network_dhcp_desired -%}
+          {%- set _ = r.append({'mac': mac, 'name': v.name, 'ip': v.ip}) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ r }}
+
+- name: determine whether a network restart is required for DHCP changes
+  ansible.builtin.set_fact:
+    libvirt_host_network_dhcp_needs_restart: >-
+      {{ (libvirt_host_network_dhcp_modify | length > 0) or (libvirt_host_network_dhcp_delete | length > 0) }}
+
+- name: extract bridge name for lease status cleanup
+  ansible.builtin.set_fact:
+    libvirt_host_network_dhcp_bridge: >-
+      {%- set m = libvirt_host_network_dhcp_live_xml.stdout
+          | regex_search("<bridge [^>]*name=['\"]([^'\"]+)['\"]", "\\1") -%}
+      {{ m[0] if m is not none else '' }}
+  when: libvirt_host_network_dhcp_needs_restart | bool
+
+- name: update changed DHCP host reservations in persistent network config
+  ansible.builtin.command:
+    argv: >-
+      {{
+        ['virsh', 'net-update', libvirt_host_network_item.name,
+         'modify', 'ip-dhcp-host',
+         "<host mac='" ~ item.mac ~ "' name='" ~ item.name ~ "' ip='" ~ item.ip ~ "'/>",
+         '--config']
+      }}
+  changed_when: true
+  loop: "{{ libvirt_host_network_dhcp_modify }}"
+  loop_control:
+    label: "{{ item.mac }} → {{ item.ip }} ({{ item.name }})"
+  when:
+    - libvirt_host_network_dhcp_needs_restart | bool
+    - libvirt_host_network_dhcp_net_persistent | bool
+
+- name: remove stale DHCP host reservations from persistent network config
+  ansible.builtin.command:
+    argv: >-
+      {{
+        ['virsh', 'net-update', libvirt_host_network_item.name,
+         'delete', 'ip-dhcp-host',
+         "<host mac='" ~ item.mac ~ "' ip='" ~ item.ip ~ "'/>",
+         '--config']
+      }}
+  changed_when: true
+  loop: "{{ libvirt_host_network_dhcp_delete }}"
+  loop_control:
+    label: "{{ item.mac }} ({{ item.name }})"
+  when:
+    - libvirt_host_network_dhcp_needs_restart | bool
+    - libvirt_host_network_dhcp_net_persistent | bool
+
+- name: add new DHCP host reservations to network
+  ansible.builtin.command:
+    argv: >-
+      {{
+        ['virsh', 'net-update', libvirt_host_network_item.name,
+         'add', 'ip-dhcp-host',
+         "<host mac='" ~ item.mac ~ "' name='" ~ item.name ~ "' ip='" ~ item.ip ~ "'/>"]
+        + (['--config'] if libvirt_host_network_dhcp_net_persistent | bool else [])
+        + ([] if libvirt_host_network_dhcp_needs_restart | bool else (['--live'] if libvirt_host_network_dhcp_net_active | bool else []))
+      }}
+  changed_when: true
+  loop: "{{ libvirt_host_network_dhcp_add }}"
+  loop_control:
+    label: "{{ item.mac }} → {{ item.ip }} ({{ item.name }})"
+
+- name: destroy network to flush stale dnsmasq in-memory leases
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - net-destroy
+      - "{{ libvirt_host_network_item.name }}"
+  changed_when: true
+  when:
+    - libvirt_host_network_dhcp_needs_restart | bool
+    - libvirt_host_network_dhcp_net_active | bool
+
+- name: read bridge lease status for stale entry removal
+  ansible.builtin.slurp:
+    src: "/var/lib/libvirt/dnsmasq/{{ libvirt_host_network_dhcp_bridge }}.status"
+  register: libvirt_host_network_bridge_status_raw
+  failed_when: false
+  when:
+    - libvirt_host_network_dhcp_needs_restart | bool
+    - (libvirt_host_network_dhcp_bridge | default('')) | length > 0
+
+- name: remove stale MAC entries from bridge lease status file
+  ansible.builtin.copy:
+    content: >-
+      {%- set stale_macs = (libvirt_host_network_dhcp_modify + libvirt_host_network_dhcp_delete) | map(attribute='mac') | list -%}
+      {%- set leases = libvirt_host_network_bridge_status_raw.content | b64decode | from_json -%}
+      {%- set clean = [] -%}
+      {%- for l in leases -%}
+        {%- if l['mac-address'] | default('') not in stale_macs -%}
+          {%- set _ = clean.append(l) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ clean | to_json }}
+    dest: "/var/lib/libvirt/dnsmasq/{{ libvirt_host_network_dhcp_bridge }}.status"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - libvirt_host_network_dhcp_needs_restart | bool
+    - (libvirt_host_network_dhcp_bridge | default('')) | length > 0
+    - libvirt_host_network_bridge_status_raw is not failed
+    - libvirt_host_network_bridge_status_raw.content is defined
+
+- name: start network with clean dnsmasq lease state
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - net-start
+      - "{{ libvirt_host_network_item.name }}"
+  changed_when: true
+  when:
+    - libvirt_host_network_dhcp_needs_restart | bool
+    - libvirt_host_network_dhcp_net_persistent | bool
