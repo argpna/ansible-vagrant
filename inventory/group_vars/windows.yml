@@ -2,6 +2,7 @@ provider_options:
   memory_backing: memfd
 
 ansible_connection: psrp
+mssql_host_connection: psrp
 ansible_user: vagrant
 ansible_password: vagrant
 ansible_port: 5986
