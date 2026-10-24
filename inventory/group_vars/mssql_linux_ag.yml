@@ -1,12 +1,42 @@
+linux_sql_server:
+  state: present
+  version: "{{ sql_version | default(2022) }}"
+  accept_eula: true
+  edition: Developer
+  sa_password: VagrantPass1!
+  enable_agent: true
+  hadr_enabled: true
+  install_tools: true
+  install_ha_agent: true
+  tcp_port: 1433
+  hadr_endpoint_port: 5022
+  manage_firewall: true
+  ad_auth:
+    enabled: true
+    account_password: VagrantPass1!
+    accounts:
+      lnx-cluster-n01: sql-cluster-n01
+      lnx-cluster-n02: sql-cluster-n02
+
 mssql:
+  cluster:
+    name: linuxcl01
+    hacluster_password: VagrantPass1!
+    # openssl passwd -6 -salt mssqllabhacluster 'VagrantPass1!'
+    hacluster_password_hash: "$6$mssqllabhacluste$1f4KlVGYWNPBYu7FrgXIrc/mLptOE7yZ8u2ZTj1CUHUODIyz/T1enrY/IhMBao8kZvfwS9EE0D84kFS80jPx.0"  # noqa yaml[line-length]
+    sql_login:
+      manage: true
+      name: pacemaker
+      password: VagrantPass1!
+      secrets_file: /var/opt/mssql/secrets/passwd
   ag:
     name: aglinux01
     cluster_type: external
   topology:
     mode: multi_subnet
     nodes:
-      - linux-cluster-n01
-      - linux-cluster-n02
+      - lnx-cluster-n01
+      - lnx-cluster-n02
     node_subnets:
-      linux-cluster-n01: 192.168.131.0/24
-      linux-cluster-n02: 192.168.132.0/24
+      lnx-cluster-n01: 192.168.131.0/24
+      lnx-cluster-n02: 192.168.132.0/24

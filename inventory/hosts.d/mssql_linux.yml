@@ -6,11 +6,12 @@ all:
           children:
             mssql_linux_ag:
               hosts:
-                linux-cluster-n01:
+                lnx-cluster-n01:
                   os: linux
                   ansible_host: 192.168.131.61
                   mac: 02:56:c0:a8:83:3d
                   vagrant_box: cloud-image/ubuntu-22.04
+                  sql_version: 2022
                   network_interfaces:
                     - name: sql
                       network: mssql-main
@@ -18,11 +19,12 @@ all:
                       mac: 02:56:c0:a8:83:3d
                       role: sql
 
-                linux-cluster-n02:
+                lnx-cluster-n02:
                   os: linux
                   ansible_host: 192.168.132.62
                   mac: 02:56:c0:a8:84:3e
                   vagrant_box: cloud-image/ubuntu-22.04
+                  sql_version: 2022
                   network_interfaces:
                     - name: sql
                       network: mssql-dr
