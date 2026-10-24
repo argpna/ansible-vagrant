@@ -1,0 +1,107 @@
+---
+- name: assert required domain member settings are present
+  ansible.builtin.assert:
+    that:
+      - domain.name is defined
+      - domain.controller_host is defined
+      - domain.controller_ip is defined
+      - domain.admin.username is defined
+      - domain.admin.upn is defined
+      - domain.admin.password is defined
+    fail_msg: >-
+      domain must define the lab domain name, the domain controller host/ip
+      and the domain admin credentials before a host can join the domain.
+
+- name: install domain member packages on apt platforms
+  ansible.builtin.apt:
+    name: "{{ linux_domain_member_apt_packages }}"
+    state: present
+    update_cache: true
+  when: ansible_pkg_mgr == 'apt'
+
+- name: install domain member packages on dnf platforms
+  ansible.builtin.dnf:
+    name: "{{ linux_domain_member_dnf_packages }}"
+    state: present
+  when:
+    - ansible_pkg_mgr == 'dnf'
+    - ansible_distribution_major_version | int != 8
+
+- name: install domain member packages on RHEL 8 hosts
+  ansible.builtin.raw: >-
+    rpm -q {{ linux_domain_member_dnf_packages | join(' ') }} >/dev/null 2>&1 &&
+    echo package-state-present ||
+    { dnf install -y {{ linux_domain_member_dnf_packages | join(' ') }} &&
+    echo package-state-installed; }
+  register: linux_domain_member_redhat8_packages
+  changed_when: "'package-state-installed' in linux_domain_member_redhat8_packages.stdout"
+  when:
+    - ansible_pkg_mgr == 'dnf'
+    - ansible_distribution_major_version | int == 8
+
+- name: check whether systemd-resolved manages name resolution
+  ansible.builtin.stat:
+    path: /run/systemd/resolve/stub-resolv.conf
+  register: linux_domain_member_resolved_stat
+
+# realm discovery and sssd both need the AD SRV records, so the lab domain
+# must resolve through the domain controller, not just the /etc/hosts KDC pin.
+- name: route lab domain dns queries to the domain controller
+  when: linux_domain_member_resolved_stat.stat.exists
+  block:
+    - name: ensure the systemd-resolved drop-in directory exists
+      ansible.builtin.file:
+        path: "{{ linux_domain_member_resolved_dropin | dirname }}"
+        state: directory
+        mode: "0755"
+
+    - name: point systemd-resolved at the domain controller for the lab domain
+      ansible.builtin.copy:
+        dest: "{{ linux_domain_member_resolved_dropin }}"
+        mode: "0644"
+        content: |
+          [Resolve]
+          DNS={{ domain.controller_ip }}
+          Domains={{ domain.name }}
+      notify: restart systemd-resolved
+
+- name: flush domain member dns handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: create the host A record in the lab domain dns zone
+  ansible.windows.win_dns_record:
+    name: "{{ inventory_hostname }}"
+    type: A
+    value: "{{ hostvars[inventory_hostname].ansible_host }}"
+    zone: "{{ domain.name }}"
+    state: present
+  delegate_to: "{{ domain.controller_host }}"
+  become: false
+
+- name: query the current realm membership
+  ansible.builtin.command:
+    cmd: realm list --name-only
+  register: linux_domain_member_realm_list
+  changed_when: false
+
+- name: join the host to the lab domain
+  ansible.builtin.command:
+    cmd: realm join --user {{ domain.admin.upn }} {{ domain.name }}
+    stdin: "{{ domain.admin.password }}"
+  changed_when: true
+  when: domain.name not in linux_domain_member_realm_list.stdout_lines
+
+- name: ensure the sssd service is enabled and running
+  ansible.builtin.systemd_service:
+    name: sssd
+    enabled: true
+    state: started
+
+- name: validate the domain admin identity resolves through sssd
+  ansible.builtin.command:
+    cmd: id {{ domain.admin.username }}@{{ domain.name }}
+  register: linux_domain_member_admin_id
+  changed_when: false
+  retries: 6
+  delay: 10
+  until: linux_domain_member_admin_id.rc == 0

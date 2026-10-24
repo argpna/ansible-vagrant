@@ -1,0 +1,21 @@
+---
+# Usage examples:
+#   ansible-playbook playbooks/linux-domain-members.yml
+#   ansible-playbook playbooks/linux-domain-members.yml --limit lnx-cluster-n01
+#
+- name: join MSSQL Linux cluster hosts to the lab domain
+  hosts: mssql_linux_ag
+  become: true
+  gather_facts: true
+  module_defaults:
+    ansible.builtin.apt:
+      update_cache: true
+      cache_valid_time: 3600
+
+  pre_tasks:
+    - name: wait for MSSQL Linux host connection
+      ansible.builtin.wait_for_connection:
+
+  roles:
+    - role: linux_kerberos_client
+    - role: linux_domain_member

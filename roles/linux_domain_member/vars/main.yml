@@ -1,0 +1,20 @@
+---
+linux_domain_member_dnf_packages:
+  - realmd
+  - sssd
+  - sssd-tools
+  - adcli
+  - oddjob
+  - oddjob-mkhomedir
+  - samba-common-tools
+
+linux_domain_member_apt_packages:
+  - realmd
+  - sssd
+  - sssd-tools
+  - libnss-sss
+  - libpam-sss
+  - adcli
+  - packagekit
+
+linux_domain_member_resolved_dropin: /etc/systemd/resolved.conf.d/lab-domain.conf
