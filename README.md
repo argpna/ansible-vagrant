@@ -118,7 +118,7 @@ Shared lab settings live in group vars:
 * [mssql_windows_ag.yml](inventory/group_vars/mssql_windows_ag.yml) -
   MSSQL cluster, availability groups topology settings
 * [mssql_linux_ag.yml](inventory/group_vars/mssql_linux_ag.yml) -
-  Linux MSSQL availability groups topology settings (only placeholder at the moment)
+  Linux SQL Server install settings, Pacemaker cluster settings, and availability group topology
 
 Two singleton groups are assumed by the playbooks:
 
@@ -216,6 +216,27 @@ Primary playbooks:
 * [windows-sql-server.yml](playbooks/windows-sql-server.yml)
 * [windows-failover-cluster.yml](playbooks/windows-failover-cluster.yml)
 
+### Linux SQL and cluster roles
+
+These roles are the Linux counterparts of the Windows SQL and cluster roles.
+
+* [linux_domain_member](roles/linux_domain_member/README.md) -
+  points the host at the DC for DNS, creates its AD DNS record, joins the realm
+  through sssd, and validates the domain identity (runs after
+  [linux_kerberos_client](roles/linux_kerberos_client/README.md))
+* [linux_sql_server](roles/linux_sql_server/README.md) -
+  installs and configures SQL Server from the Microsoft repositories and sets
+  up AD authentication through an adutil keytab
+* [linux_pacemaker_cluster](roles/linux_pacemaker_cluster/README.md) -
+  prepares the nodes, creates or destroys the Pacemaker/Corosync cluster, and
+  provisions the SQL login the cluster resource agent uses
+
+Primary playbooks:
+
+* [linux-domain-members.yml](playbooks/linux-domain-members.yml)
+* [linux-sql-server.yml](playbooks/linux-sql-server.yml)
+* [linux-pacemaker-cluster.yml](playbooks/linux-pacemaker-cluster.yml)
+
 ### Optional Windows utility roles
 
 These roles are optional and are not treated as baseline requirements for every Windows host.
@@ -294,7 +315,10 @@ Additional utility playbooks are available:
 
 When running [main.yml](playbooks/main.yml), the guest-tools and OpenSSH utility
 imports are tagged `never`. Run them explicitly with `--tags windows_guest_tools`
-or `--tags windows_openssh` when you want those utility flows included.
+or `--tags windows_openssh` when you want those utility flows included. The Linux
+domain member, SQL Server, and Pacemaker cluster imports are tagged `never` the
+same way and run with `--tags linux_domain_members`, `--tags linux_sql_server`,
+or `--tags linux_pacemaker_cluster`.
 
 ## Provider Options
 
