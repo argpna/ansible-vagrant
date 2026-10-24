@@ -55,6 +55,24 @@
     - never
     - windows_sql_server
 
+- name: import linux domain members playbook
+  ansible.builtin.import_playbook: linux-domain-members.yml
+  tags:
+    - never
+    - linux_domain_members
+
+- name: import linux sql server playbook
+  ansible.builtin.import_playbook: linux-sql-server.yml
+  tags:
+    - never
+    - linux_sql_server
+
+- name: import linux pacemaker cluster playbook
+  ansible.builtin.import_playbook: linux-pacemaker-cluster.yml
+  tags:
+    - never
+    - linux_pacemaker_cluster
+
 - name: import windows openssh playbook
   ansible.builtin.import_playbook: windows-openssh.yml
   tags:
