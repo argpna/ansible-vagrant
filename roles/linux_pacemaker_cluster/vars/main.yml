@@ -1,0 +1,17 @@
+---
+linux_pacemaker_cluster_apt_packages:
+  - pacemaker
+  - corosync
+  - pcs
+  - resource-agents
+  - fence-agents
+
+linux_pacemaker_cluster_dnf_packages:
+  - pacemaker
+  - corosync
+  - pcs
+  - resource-agents
+  - fence-agents-all
+
+linux_pacemaker_cluster_known_hosts_file: /var/lib/pcsd/known-hosts
+linux_pacemaker_cluster_corosync_conf: /etc/corosync/corosync.conf

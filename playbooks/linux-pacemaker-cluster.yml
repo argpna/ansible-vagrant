@@ -1,0 +1,83 @@
+---
+# Usage examples:
+#   ansible-playbook playbooks/linux-pacemaker-cluster.yml
+#   ansible-playbook playbooks/linux-pacemaker-cluster.yml --limit lnx-cluster-n01:lnx-cluster-n02
+#   ansible-playbook playbooks/linux-pacemaker-cluster.yml -e linux_pacemaker_cluster_state=absent
+#
+- name: prepare MSSQL Linux cluster hosts for Pacemaker clustering
+  hosts: mssql_linux_ag
+  become: true
+  gather_facts: true
+  module_defaults:
+    ansible.builtin.apt:
+      update_cache: true
+      cache_valid_time: 3600
+
+  pre_tasks:
+    - name: require at least two MSSQL Linux cluster hosts in inventory
+      ansible.builtin.assert:
+        that:
+          - groups['mssql_linux_ag'] | default([]) | length >= 2
+        fail_msg: "Inventory must define at least two hosts in group 'mssql_linux_ag'."
+
+    - name: wait for MSSQL Linux cluster host connection
+      ansible.builtin.wait_for_connection:
+
+  tasks:
+    - name: prepare MSSQL Linux cluster hosts for pacemaker prerequisites
+      ansible.builtin.include_role:
+        name: linux_pacemaker_cluster
+        tasks_from: prereqs.yml
+      when: (linux_pacemaker_cluster_state | default('present')) == 'present'
+
+- name: create the Pacemaker cluster for MSSQL Linux cluster hosts
+  hosts: mssql_linux_ag[0]
+  become: true
+  gather_facts: false
+
+  pre_tasks:
+    - name: require at least two MSSQL Linux cluster hosts in inventory
+      ansible.builtin.assert:
+        that:
+          - groups['mssql_linux_ag'] | default([]) | length >= 2
+        fail_msg: "Inventory must define at least two hosts in group 'mssql_linux_ag'."
+
+    - name: wait for cluster bootstrap node connection
+      ansible.builtin.wait_for_connection:
+
+  tasks:
+    - name: create the pacemaker cluster and apply the cluster properties
+      ansible.builtin.include_role:
+        name: linux_pacemaker_cluster
+        tasks_from: create_cluster.yml
+      when: (linux_pacemaker_cluster_state | default('present')) == 'present'
+
+    - name: destroy the pacemaker cluster
+      ansible.builtin.include_role:
+        name: linux_pacemaker_cluster
+        tasks_from: destroy_cluster.yml
+      when: (linux_pacemaker_cluster_state | default('present')) == 'absent'
+
+- name: configure the pacemaker SQL Server login on MSSQL Linux cluster hosts
+  hosts: mssql_linux_ag
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: create the pacemaker SQL Server login and credentials file
+      ansible.builtin.include_role:
+        name: linux_pacemaker_cluster
+        tasks_from: sql_login.yml
+      vars:
+        linux_pacemaker_cluster_sql_login_state: present
+      when:
+        - (linux_pacemaker_cluster_state | default('present')) == 'present'
+        - mssql.cluster.sql_login.manage | default(false)
+
+    - name: remove the pacemaker SQL Server credentials file
+      ansible.builtin.include_role:
+        name: linux_pacemaker_cluster
+        tasks_from: sql_login.yml
+      vars:
+        linux_pacemaker_cluster_sql_login_state: absent
+      when: (linux_pacemaker_cluster_state | default('present')) == 'absent'

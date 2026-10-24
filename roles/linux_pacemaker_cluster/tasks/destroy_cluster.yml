@@ -1,0 +1,11 @@
+---
+- name: inspect the corosync configuration
+  ansible.builtin.stat:
+    path: "{{ linux_pacemaker_cluster_corosync_conf }}"
+  register: linux_pacemaker_cluster_corosync_stat
+
+- name: destroy the pacemaker cluster on all nodes
+  ansible.builtin.command:
+    cmd: pcs cluster destroy --all
+  changed_when: true
+  when: linux_pacemaker_cluster_corosync_stat.stat.exists

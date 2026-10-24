@@ -1,0 +1,56 @@
+---
+# Creates the SQL Server login the ocf:mssql:ag resource agent uses and the
+# credentials file it reads. Availability groups are not created here.
+- name: assert required pacemaker SQL login settings are present
+  ansible.builtin.assert:
+    that:
+      - mssql.cluster.sql_login.name is defined
+      - mssql.cluster.sql_login.password is defined
+      - mssql.cluster.sql_login.secrets_file is defined
+      - linux_sql_server.sa_password is defined
+    fail_msg: >-
+      mssql.cluster.sql_login must define the pacemaker login name, password
+      and secrets file, and linux_sql_server.sa_password must be available to
+      manage the login.
+
+- name: manage the pacemaker SQL Server login
+  when: (linux_pacemaker_cluster_sql_login_state | default('present')) == 'present'
+  block:
+    - name: check whether the pacemaker SQL Server login exists
+      ansible.builtin.command:
+        cmd: >-
+          {{ linux_sql_server_sqlcmd | default('/opt/mssql-tools18/bin/sqlcmd') }}
+          -S localhost,{{ linux_sql_server.tcp_port | default(1433) }} -U sa -C -b -h -1
+          -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM sys.server_principals WHERE name = N'{{ mssql.cluster.sql_login.name }}';"
+      environment:
+        SQLCMDPASSWORD: "{{ linux_sql_server.sa_password }}"
+      register: linux_pacemaker_cluster_sql_login_check
+      changed_when: false
+
+    - name: create the pacemaker SQL Server login
+      ansible.builtin.command:
+        cmd: >-
+          {{ linux_sql_server_sqlcmd | default('/opt/mssql-tools18/bin/sqlcmd') }}
+          -S localhost,{{ linux_sql_server.tcp_port | default(1433) }} -U sa -C -b
+          -Q "CREATE LOGIN [{{ mssql.cluster.sql_login.name }}] WITH PASSWORD = N'{{ mssql.cluster.sql_login.password }}';
+          ALTER SERVER ROLE [sysadmin] ADD MEMBER [{{ mssql.cluster.sql_login.name }}];"
+      environment:
+        SQLCMDPASSWORD: "{{ linux_sql_server.sa_password }}"
+      changed_when: true
+      when: linux_pacemaker_cluster_sql_login_check.stdout | trim | first == '0'
+
+    - name: write the pacemaker SQL Server credentials file
+      ansible.builtin.copy:
+        dest: "{{ mssql.cluster.sql_login.secrets_file }}"
+        content: |
+          {{ mssql.cluster.sql_login.name }}
+          {{ mssql.cluster.sql_login.password }}
+        owner: root
+        group: root
+        mode: "0400"
+
+- name: remove the pacemaker SQL Server credentials file
+  ansible.builtin.file:
+    path: "{{ mssql.cluster.sql_login.secrets_file }}"
+    state: absent
+  when: (linux_pacemaker_cluster_sql_login_state | default('present')) == 'absent'

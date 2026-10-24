@@ -1,0 +1,10 @@
+---
+# stonith-enabled=false is acceptable for this lab setup.
+# ideally requires a working fencing device.
+linux_pacemaker_cluster_properties:
+  stonith-enabled: "false"
+  cluster-recheck-interval: 2min
+  start-failure-is-fatal: "false"
+
+# Corosync totem token timeout in milliseconds
+linux_pacemaker_cluster_totem_token_ms: 30000

@@ -1,0 +1,112 @@
+---
+- name: assert required pacemaker cluster settings are present
+  ansible.builtin.assert:
+    that:
+      - mssql.cluster.name is defined
+      - mssql.cluster.hacluster_password is defined
+      - mssql.cluster.hacluster_password_hash is defined
+      - mssql.topology.nodes is defined
+      - mssql.topology.nodes | length >= 2
+    fail_msg: >-
+      mssql.cluster and mssql.topology must define the pacemaker cluster
+      identity, the hacluster credentials, and at least two MSSQL Linux
+      cluster hosts.
+
+# Node hostnames resolve through AD DNS (linux-domain-members.yml creates the
+# A records); corosync itself uses the explicit addr= IPs at cluster setup.
+- name: verify every cluster node hostname resolves through the lab domain dns
+  ansible.builtin.command:
+    cmd: getent hosts {{ item }}.{{ domain.name }}
+  loop: "{{ mssql.topology.nodes }}"
+  register: linux_pacemaker_cluster_node_dns
+  changed_when: false
+  failed_when: hostvars[item].ansible_host not in linux_pacemaker_cluster_node_dns.stdout | default('')
+
+- name: install pacemaker cluster packages on apt platforms
+  ansible.builtin.apt:
+    name: "{{ linux_pacemaker_cluster_apt_packages }}"
+    state: present
+    update_cache: true
+  when: ansible_pkg_mgr == 'apt'
+
+- name: enable the high availability repository on RedHat-family hosts
+  ansible.builtin.command:
+    cmd: >-
+      dnf config-manager --set-enabled
+      {{ 'ha' if ansible_distribution_major_version | int == 8 else 'highavailability' }}
+  changed_when: false
+  when: ansible_pkg_mgr == 'dnf'
+
+- name: install pacemaker cluster packages on dnf platforms
+  ansible.builtin.dnf:
+    name: "{{ linux_pacemaker_cluster_dnf_packages }}"
+    state: present
+  when:
+    - ansible_pkg_mgr == 'dnf'
+    - ansible_distribution_major_version | int != 8
+
+- name: install pacemaker cluster packages on RHEL 8 hosts
+  ansible.builtin.raw: >-
+    rpm -q {{ linux_pacemaker_cluster_dnf_packages | join(' ') }} >/dev/null 2>&1 &&
+    echo package-state-present ||
+    { dnf install -y {{ linux_pacemaker_cluster_dnf_packages | join(' ') }} &&
+    echo package-state-installed; }
+  register: linux_pacemaker_cluster_redhat8_packages
+  changed_when: "'package-state-installed' in linux_pacemaker_cluster_redhat8_packages.stdout"
+  when:
+    - ansible_pkg_mgr == 'dnf'
+    - ansible_distribution_major_version | int == 8
+
+- name: set the hacluster user password
+  ansible.builtin.user:
+    name: hacluster
+    password: "{{ mssql.cluster.hacluster_password_hash }}"
+    state: present
+
+- name: ensure the pcsd service is enabled and running
+  ansible.builtin.systemd_service:
+    name: pcsd
+    enabled: true
+    state: started
+
+- name: gather service facts for the firewalld state
+  ansible.builtin.service_facts:
+
+- name: open the high availability firewalld service
+  when: (ansible_facts.services['firewalld.service'].state | default('')) == 'running'
+  block:
+    - name: query the high availability firewalld service
+      ansible.builtin.command:
+        cmd: firewall-cmd --query-service=high-availability
+      register: linux_pacemaker_cluster_firewalld_service
+      changed_when: false
+      failed_when: false
+
+    - name: open the high availability firewalld service permanently
+      ansible.builtin.command:
+        cmd: firewall-cmd --permanent --add-service=high-availability
+      changed_when: true
+      when: linux_pacemaker_cluster_firewalld_service.rc != 0
+      notify: reload firewalld
+
+- name: inspect the corosync configuration
+  ansible.builtin.stat:
+    path: "{{ linux_pacemaker_cluster_corosync_conf }}"
+  register: linux_pacemaker_cluster_corosync_stat
+
+- name: read the corosync configuration
+  ansible.builtin.slurp:
+    src: "{{ linux_pacemaker_cluster_corosync_conf }}"
+  register: linux_pacemaker_cluster_corosync_content
+  when: linux_pacemaker_cluster_corosync_stat.stat.exists
+
+# Debian-family packages ship and start a default corosync configuration
+# (cluster_name: debian) which makes "pcs cluster setup" refuse to run. Clear
+# any corosync config that does not belong to the lab cluster.
+- name: clear a stale or distribution-default corosync configuration
+  ansible.builtin.command:
+    cmd: pcs cluster destroy
+  changed_when: true
+  when:
+    - linux_pacemaker_cluster_corosync_stat.stat.exists
+    - "('cluster_name: ' ~ mssql.cluster.name) not in (linux_pacemaker_cluster_corosync_content.content | b64decode)"

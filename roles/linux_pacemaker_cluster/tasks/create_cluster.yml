@@ -1,0 +1,123 @@
+---
+- name: assert required cluster creation settings are present
+  ansible.builtin.assert:
+    that:
+      - mssql.cluster.name is defined
+      - mssql.cluster.hacluster_password is defined
+      - mssql.topology.nodes is defined
+      - mssql.topology.nodes | length >= 2
+      - mssql.topology.nodes | difference(hostvars.keys() | list) | length == 0
+    fail_msg: >-
+      mssql.cluster must define the cluster name and hacluster password, and
+      every mssql.topology node must exist in the inventory before cluster
+      creation.
+
+- name: inspect the pcsd known hosts file
+  ansible.builtin.stat:
+    path: "{{ linux_pacemaker_cluster_known_hosts_file }}"
+  register: linux_pacemaker_cluster_known_hosts_stat
+
+- name: read the pcsd known hosts file
+  ansible.builtin.slurp:
+    src: "{{ linux_pacemaker_cluster_known_hosts_file }}"
+  register: linux_pacemaker_cluster_known_hosts_content
+  when: linux_pacemaker_cluster_known_hosts_stat.stat.exists
+
+- name: determine which cluster nodes pcsd has authenticated
+  ansible.builtin.set_fact:
+    linux_pacemaker_cluster_authenticated_nodes: >-
+      {{
+        (linux_pacemaker_cluster_known_hosts_content.content | b64decode | from_json).known_hosts.keys() | list
+        if linux_pacemaker_cluster_known_hosts_stat.stat.exists else []
+      }}
+
+- name: authenticate pcsd across the cluster nodes
+  ansible.builtin.command:
+    cmd: >-
+      pcs host auth
+      {% for node in mssql.topology.nodes %}{{ node }} addr={{ hostvars[node].ansible_host }} {% endfor %}
+      -u hacluster -p {{ mssql.cluster.hacluster_password }}
+  changed_when: true
+  when: mssql.topology.nodes | difference(linux_pacemaker_cluster_authenticated_nodes) | length > 0
+
+- name: inspect the corosync configuration
+  ansible.builtin.stat:
+    path: "{{ linux_pacemaker_cluster_corosync_conf }}"
+  register: linux_pacemaker_cluster_corosync_stat
+
+- name: read the corosync configuration
+  ansible.builtin.slurp:
+    src: "{{ linux_pacemaker_cluster_corosync_conf }}"
+  register: linux_pacemaker_cluster_corosync_content
+  when: linux_pacemaker_cluster_corosync_stat.stat.exists
+
+- name: determine whether the pacemaker cluster already exists
+  ansible.builtin.set_fact:
+    linux_pacemaker_cluster_exists: >-
+      {{
+        linux_pacemaker_cluster_corosync_stat.stat.exists
+        and ('cluster_name: ' ~ mssql.cluster.name)
+        in (linux_pacemaker_cluster_corosync_content.content | default('') | b64decode)
+      }}
+
+- name: create the pacemaker cluster
+  ansible.builtin.command:
+    cmd: >-
+      pcs cluster setup {{ mssql.cluster.name }}
+      {% for node in mssql.topology.nodes %}{{ node }} addr={{ hostvars[node].ansible_host }} {% endfor %}
+      --start --enable
+  changed_when: true
+  when: not linux_pacemaker_cluster_exists | bool
+
+- name: wait for all cluster nodes to come online
+  ansible.builtin.command:
+    cmd: crm_mon -1
+  register: linux_pacemaker_cluster_mon
+  changed_when: false
+  retries: 18
+  delay: 10
+  until: >-
+    mssql.topology.nodes
+    | select('in', linux_pacemaker_cluster_mon.stdout_lines | select('search', 'Online') | join(' '))
+    | length == mssql.topology.nodes | length
+
+- name: read the corosync totem token timeout
+  ansible.builtin.command:
+    cmd: grep -E '^\s*token:\s*{{ linux_pacemaker_cluster_totem_token_ms }}\s*$' {{ linux_pacemaker_cluster_corosync_conf }}
+  register: linux_pacemaker_cluster_totem_token
+  changed_when: false
+  failed_when: linux_pacemaker_cluster_totem_token.rc not in [0, 1]
+
+- name: update the corosync totem token timeout
+  ansible.builtin.command:
+    cmd: pcs cluster config update totem token={{ linux_pacemaker_cluster_totem_token_ms }}
+  changed_when: true
+  when: linux_pacemaker_cluster_totem_token.rc != 0
+
+- name: read the pacemaker cluster properties
+  ansible.builtin.command:
+    cmd: pcs property config
+  register: linux_pacemaker_cluster_property_config
+  changed_when: false
+
+- name: set the pacemaker cluster properties
+  ansible.builtin.command:
+    cmd: pcs property set {{ item.key }}={{ item.value }}
+  loop: "{{ linux_pacemaker_cluster_properties | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  changed_when: true
+  when: >-
+    (item.key ~ ': ' ~ item.value) not in linux_pacemaker_cluster_property_config.stdout
+
+- name: validate the cluster is online
+  ansible.builtin.command:
+    cmd: crm_mon -1
+  register: linux_pacemaker_cluster_final_state
+  changed_when: false
+  retries: 6
+  delay: 10
+  until: >-
+    mssql.topology.nodes
+    | select('in', linux_pacemaker_cluster_final_state.stdout_lines | select('search', 'Online') | join(' '))
+    | length == mssql.topology.nodes | length
