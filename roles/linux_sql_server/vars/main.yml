@@ -1,0 +1,34 @@
+---
+linux_sql_server_key_url: https://packages.microsoft.com/keys/microsoft.asc
+linux_sql_server_apt_keyring: /etc/apt/keyrings/microsoft.gpg
+
+linux_sql_server_apt_server_repo: >-
+  deb [arch=amd64 signed-by={{ linux_sql_server_apt_keyring }}]
+  https://packages.microsoft.com/ubuntu/{{ ansible_distribution_version }}/mssql-server-{{ linux_sql_server.version }}
+  {{ ansible_distribution_release }} main
+linux_sql_server_apt_prod_repo: >-
+  deb [arch=amd64 signed-by={{ linux_sql_server_apt_keyring }}]
+  https://packages.microsoft.com/ubuntu/{{ ansible_distribution_version }}/prod
+  {{ ansible_distribution_release }} main
+
+linux_sql_server_dnf_server_repo_url: >-
+  https://packages.microsoft.com/config/rhel/{{ ansible_distribution_major_version }}/mssql-server-{{ linux_sql_server.version }}.repo
+linux_sql_server_dnf_prod_repo_url: >-
+  https://packages.microsoft.com/config/rhel/{{ ansible_distribution_major_version }}/prod.repo
+
+linux_sql_server_zypper_server_repo_url: >-
+  https://packages.microsoft.com/config/sles/15/mssql-server-{{ linux_sql_server.version }}.repo
+linux_sql_server_zypper_prod_repo_url: https://packages.microsoft.com/config/sles/15/prod.repo
+
+linux_sql_server_tools_packages_apt:
+  - mssql-tools18
+  - unixodbc-dev
+linux_sql_server_tools_packages_dnf:
+  - mssql-tools18
+  - unixODBC-devel
+linux_sql_server_tools_packages_zypper:
+  - mssql-tools18
+  - unixODBC-devel
+
+linux_sql_server_sqlcmd: /opt/mssql-tools18/bin/sqlcmd
+linux_sql_server_mssql_conf: /opt/mssql/bin/mssql-conf

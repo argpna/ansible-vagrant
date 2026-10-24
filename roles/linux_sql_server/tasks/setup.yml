@@ -1,0 +1,26 @@
+---
+- name: check whether SQL Server has already been configured
+  ansible.builtin.stat:
+    path: /var/opt/mssql/data/master.mdf
+  register: linux_sql_server_master_db
+
+- name: run the initial SQL Server setup
+  ansible.builtin.command:
+    cmd: "{{ linux_sql_server_mssql_conf }} -n setup"
+  environment:
+    ACCEPT_EULA: "Y"
+    MSSQL_SA_PASSWORD: "{{ linux_sql_server.sa_password }}"
+    MSSQL_PID: "{{ linux_sql_server.edition | default('Developer') }}"
+  changed_when: true
+  when: not linux_sql_server_master_db.stat.exists
+
+- name: ensure the mssql-server service is enabled and running
+  ansible.builtin.systemd_service:
+    name: mssql-server
+    enabled: true
+    state: started
+
+- name: wait for SQL Server to accept TCP connections
+  ansible.builtin.wait_for:
+    port: "{{ linux_sql_server.tcp_port | default(1433) }}"
+    timeout: 300

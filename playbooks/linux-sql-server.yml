@@ -1,0 +1,21 @@
+---
+# Usage examples:
+#   ansible-playbook playbooks/linux-sql-server.yml
+#   ansible-playbook playbooks/linux-sql-server.yml --limit mssql_linux_ag
+#   ansible-playbook playbooks/linux-sql-server.yml --limit ubuntu2204-sql2022
+#
+- name: install SQL Server on MSSQL Linux hosts
+  hosts: mssql_linux_ag:mssql_linux_matrix
+  become: true
+  gather_facts: true
+  module_defaults:
+    ansible.builtin.apt:
+      update_cache: true
+      cache_valid_time: 3600
+
+  pre_tasks:
+    - name: wait for MSSQL Linux host connection
+      ansible.builtin.wait_for_connection:
+
+  roles:
+    - role: linux_sql_server

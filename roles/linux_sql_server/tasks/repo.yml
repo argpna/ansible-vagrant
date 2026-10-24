@@ -1,0 +1,75 @@
+---
+- name: configure Microsoft apt repositories
+  when: ansible_pkg_mgr == 'apt'
+  block:
+    - name: ensure the apt keyring directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: download the Microsoft package signing key
+      ansible.builtin.get_url:
+        url: "{{ linux_sql_server_key_url }}"
+        dest: /etc/apt/keyrings/microsoft.asc
+        mode: "0644"
+
+    - name: dearmor the Microsoft package signing key
+      ansible.builtin.command:
+        cmd: gpg --dearmor -o {{ linux_sql_server_apt_keyring }} /etc/apt/keyrings/microsoft.asc
+        creates: "{{ linux_sql_server_apt_keyring }}"
+
+    - name: add the mssql-server apt repository
+      ansible.builtin.apt_repository:
+        repo: "{{ linux_sql_server_apt_server_repo }}"
+        filename: mssql-server-{{ linux_sql_server.version }}
+        state: present
+
+    - name: add the Microsoft prod apt repository for client tools
+      ansible.builtin.apt_repository:
+        repo: "{{ linux_sql_server_apt_prod_repo }}"
+        filename: microsoft-prod
+        state: present
+      when: linux_sql_server.install_tools | default(true)
+
+- name: configure Microsoft dnf repositories
+  when: ansible_pkg_mgr == 'dnf'
+  block:
+    - name: import the Microsoft package signing key
+      ansible.builtin.rpm_key:
+        key: "{{ linux_sql_server_key_url }}"
+        state: present
+
+    - name: add the mssql-server dnf repository
+      ansible.builtin.get_url:
+        url: "{{ linux_sql_server_dnf_server_repo_url }}"
+        dest: /etc/yum.repos.d/mssql-server-{{ linux_sql_server.version }}.repo
+        mode: "0644"
+
+    - name: add the Microsoft prod dnf repository for client tools
+      ansible.builtin.get_url:
+        url: "{{ linux_sql_server_dnf_prod_repo_url }}"
+        dest: /etc/yum.repos.d/microsoft-prod.repo
+        mode: "0644"
+      when: linux_sql_server.install_tools | default(true)
+
+- name: configure Microsoft zypper repositories
+  when: ansible_pkg_mgr == 'zypper'
+  block:
+    - name: import the Microsoft package signing key
+      ansible.builtin.rpm_key:
+        key: "{{ linux_sql_server_key_url }}"
+        state: present
+
+    - name: add the mssql-server zypper repository
+      ansible.builtin.get_url:
+        url: "{{ linux_sql_server_zypper_server_repo_url }}"
+        dest: /etc/zypp/repos.d/mssql-server-{{ linux_sql_server.version }}.repo
+        mode: "0644"
+
+    - name: add the Microsoft prod zypper repository for client tools
+      ansible.builtin.get_url:
+        url: "{{ linux_sql_server_zypper_prod_repo_url }}"
+        dest: /etc/zypp/repos.d/microsoft-prod.repo
+        mode: "0644"
+      when: linux_sql_server.install_tools | default(true)

@@ -1,0 +1,29 @@
+---
+# firewall-cmd is used directly instead of ansible.posix.firewalld because the
+# firewalld python bindings are not importable under the non-platform
+# interpreters some matrix hosts use (for example python3.9 on Rocky 8).
+- name: gather service facts for the firewalld state
+  ansible.builtin.service_facts:
+
+- name: open the SQL Server ports in firewalld
+  when: (ansible_facts.services['firewalld.service'].state | default('')) == 'running'
+  block:
+    - name: query the SQL Server firewalld ports
+      ansible.builtin.command:
+        cmd: firewall-cmd --query-port={{ item }}/tcp
+      loop:
+        - "{{ linux_sql_server.tcp_port | default(1433) }}"
+        - "{{ linux_sql_server.hadr_endpoint_port | default(5022) }}"
+      register: linux_sql_server_firewalld_ports
+      changed_when: false
+      failed_when: false
+
+    - name: open the SQL Server firewalld ports permanently
+      ansible.builtin.command:
+        cmd: firewall-cmd --permanent --add-port={{ item.item }}/tcp
+      loop: "{{ linux_sql_server_firewalld_ports.results }}"
+      loop_control:
+        label: "{{ item.item }}/tcp"
+      changed_when: true
+      when: item.rc != 0
+      notify: reload firewalld

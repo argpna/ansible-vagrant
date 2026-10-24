@@ -1,0 +1,24 @@
+---
+linux_sql_server:  # noqa var-naming[no-role-prefix]
+  state: present
+  version: "{{ sql_version | default(2022) }}"
+  accept_eula: true
+  edition: Developer
+  sa_password: VagrantPass1!
+  enable_agent: true
+  hadr_enabled: false
+  install_tools: true
+  install_ha_agent: false
+  tcp_port: 1433
+  hadr_endpoint_port: 5022
+  manage_firewall: true
+  ad_auth:
+    enabled: false
+    # sAMAccountName (max 20 chars) of the SQL Server AD service account,
+    # keyed by inventory hostname. Required when enabled.
+    accounts: {}
+    account_password: VagrantPass1!
+    keytab_file: /var/opt/mssql/secrets/mssql.keytab
+    enctypes: aes256-cts-hmac-sha1-96,aes128-cts-hmac-sha1-96
+    sysadmin_logins:
+      - "{{ domain.netbios_name }}\\{{ domain.admin.username }}"

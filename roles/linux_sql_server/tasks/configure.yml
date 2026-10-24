@@ -1,0 +1,42 @@
+---
+- name: read the SQL Server agent setting
+  ansible.builtin.command:
+    cmd: "{{ linux_sql_server_mssql_conf }} get sqlagent.enabled"
+  register: linux_sql_server_agent_setting
+  changed_when: false
+  failed_when: false
+  when: linux_sql_server.enable_agent | default(true)
+
+- name: enable the SQL Server agent
+  ansible.builtin.command:
+    cmd: "{{ linux_sql_server_mssql_conf }} set sqlagent.enabled true"
+  changed_when: true
+  when:
+    - linux_sql_server.enable_agent | default(true)
+    - linux_sql_server_agent_setting.rc != 0 or 'true' not in linux_sql_server_agent_setting.stdout | lower
+  notify: restart mssql-server
+
+- name: read the SQL Server availability group setting
+  ansible.builtin.command:
+    cmd: "{{ linux_sql_server_mssql_conf }} get hadr.hadrenabled"
+  register: linux_sql_server_hadr_setting
+  changed_when: false
+  failed_when: false
+  when: linux_sql_server.hadr_enabled | default(false)
+
+- name: enable SQL Server availability groups
+  ansible.builtin.command:
+    cmd: "{{ linux_sql_server_mssql_conf }} set hadr.hadrenabled 1"
+  changed_when: true
+  when:
+    - linux_sql_server.hadr_enabled | default(false)
+    - linux_sql_server_hadr_setting.rc != 0 or '1' not in linux_sql_server_hadr_setting.stdout
+  notify: restart mssql-server
+
+- name: flush SQL Server configuration handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: wait for SQL Server to accept TCP connections after configuration
+  ansible.builtin.wait_for:
+    port: "{{ linux_sql_server.tcp_port | default(1433) }}"
+    timeout: 300

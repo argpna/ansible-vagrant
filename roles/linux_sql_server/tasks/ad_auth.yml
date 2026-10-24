@@ -1,0 +1,208 @@
+---
+# Configures Windows Active Directory authentication for SQL Server on Linux
+# (https://learn.microsoft.com/sql/linux/sql-server-linux-ad-auth-adutil-tutorial):
+# an AD service account with the MSSQLSvc SPNs, the service keytab built with
+# adutil, the mssql-conf kerberos settings and the domain sysadmin logins.
+# The host must already be domain joined (playbooks/linux-domain-members.yml).
+- name: resolve the SQL Server AD service account and fqdn
+  ansible.builtin.set_fact:
+    linux_sql_server_ad_account: "{{ linux_sql_server.ad_auth.accounts[inventory_hostname] | default('') }}"
+    linux_sql_server_ad_fqdn: "{{ inventory_hostname }}.{{ domain.name }}"
+    linux_sql_server_ad_keytab: "{{ linux_sql_server.ad_auth.keytab_file | default('/var/opt/mssql/secrets/mssql.keytab') }}"
+    linux_sql_server_ad_enctypes: >-
+      {{ linux_sql_server.ad_auth.enctypes | default('aes256-cts-hmac-sha1-96,aes128-cts-hmac-sha1-96') }}
+
+- name: assert required AD authentication settings are present
+  ansible.builtin.assert:
+    that:
+      - linux_sql_server_ad_account | length > 0
+      - linux_sql_server_ad_account | length <= 20
+      - linux_sql_server.ad_auth.account_password is defined
+      - domain.name is defined
+      - domain.netbios_name is defined
+      - domain.admin.upn is defined
+      - domain.admin.password is defined
+    fail_msg: >-
+      linux_sql_server.ad_auth.accounts must map this inventory hostname to a
+      sAMAccountName of at most 20 characters and define account_password, and
+      the lab domain settings must be available.
+
+- name: verify the host is joined to the lab domain
+  ansible.builtin.command:
+    cmd: realm list --name-only
+  register: linux_sql_server_realm_list
+  changed_when: false
+  failed_when: domain.name not in linux_sql_server_realm_list.stdout_lines
+
+- name: install adutil on apt platforms
+  ansible.builtin.apt:
+    name: adutil
+    state: present
+    update_cache: true
+  environment:
+    ACCEPT_EULA: "Y"
+  when: ansible_pkg_mgr == 'apt'
+
+- name: install adutil on dnf platforms
+  ansible.builtin.dnf:
+    name: adutil
+    state: present
+  environment:
+    ACCEPT_EULA: "Y"
+  when:
+    - ansible_pkg_mgr == 'dnf'
+    - ansible_distribution_major_version | int != 8
+
+- name: install adutil on RHEL 8 hosts
+  ansible.builtin.raw: >-
+    rpm -q adutil >/dev/null 2>&1 &&
+    echo package-state-present ||
+    { ACCEPT_EULA=Y dnf install -y adutil && echo package-state-installed; }
+  register: linux_sql_server_adutil_redhat8
+  changed_when: "'package-state-installed' in linux_sql_server_adutil_redhat8.stdout"
+  when:
+    - ansible_pkg_mgr == 'dnf'
+    - ansible_distribution_major_version | int == 8
+
+# update_password: on_create keeps the account kvno stable so an existing
+# keytab is not invalidated by re-running the role.
+- name: create the SQL Server AD service account with its SPNs
+  microsoft.ad.user:
+    name: "{{ linux_sql_server_ad_account }}"
+    sam_account_name: "{{ linux_sql_server_ad_account }}"
+    upn: "{{ linux_sql_server_ad_account }}@{{ domain.name | upper }}"
+    password: "{{ linux_sql_server.ad_auth.account_password }}"
+    update_password: on_create
+    password_never_expires: true
+    enabled: true
+    attributes:
+      set:
+        msDS-SupportedEncryptionTypes: 24
+    spn:
+      set:
+        - MSSQLSvc/{{ linux_sql_server_ad_fqdn }}
+        - MSSQLSvc/{{ linux_sql_server_ad_fqdn }}:{{ linux_sql_server.tcp_port | default(1433) }}
+        - MSSQLSvc/{{ inventory_hostname }}
+        - MSSQLSvc/{{ inventory_hostname }}:{{ linux_sql_server.tcp_port | default(1433) }}
+    state: present
+  delegate_to: "{{ domain.controller_host }}"
+  become: false
+
+- name: inspect the SQL Server keytab
+  ansible.builtin.command:
+    cmd: klist -k {{ linux_sql_server_ad_keytab }}
+  register: linux_sql_server_keytab_list
+  changed_when: false
+  failed_when: false
+
+- name: create the SQL Server keytab
+  when: >-
+    linux_sql_server_keytab_list.rc != 0
+    or ('MSSQLSvc/' ~ linux_sql_server_ad_fqdn) not in linux_sql_server_keytab_list.stdout
+    or (linux_sql_server_ad_account ~ '@') not in linux_sql_server_keytab_list.stdout
+  block:
+    # adutil resolves the account kvno through LDAP, which needs a ticket.
+    - name: obtain a kerberos ticket as the domain admin
+      ansible.builtin.command:
+        cmd: kinit {{ domain.admin.upn }}
+        stdin: "{{ domain.admin.password }}"
+      changed_when: false
+
+    # -y and --password are both required for non-interactive use: adutil
+    # prompts for SPN confirmation and the account password on the tty
+    # otherwise, the task hangs forever.
+    - name: create keytab entries for the SQL Server SPNs
+      ansible.builtin.command:
+        cmd: >-
+          adutil keytab createauto -y -k {{ linux_sql_server_ad_keytab }}
+          -p {{ linux_sql_server.tcp_port | default(1433) }}
+          -H {{ linux_sql_server_ad_fqdn }} -s MSSQLSvc
+          -e {{ linux_sql_server_ad_enctypes }}
+          --password {{ linux_sql_server.ad_auth.account_password | quote }}
+      changed_when: true
+      when: >-
+        linux_sql_server_keytab_list.rc != 0
+        or ('MSSQLSvc/' ~ linux_sql_server_ad_fqdn) not in linux_sql_server_keytab_list.stdout
+
+    # keytab create has no -y flag; -e and --password make it non-interactive.
+    - name: add the service account principal to the keytab
+      ansible.builtin.command:
+        cmd: >-
+          adutil keytab create -k {{ linux_sql_server_ad_keytab }}
+          -p {{ linux_sql_server_ad_account }}
+          -e {{ linux_sql_server_ad_enctypes }}
+          --password {{ linux_sql_server.ad_auth.account_password | quote }}
+      changed_when: true
+      when: (linux_sql_server_ad_account ~ '@') not in linux_sql_server_keytab_list.stdout
+
+  always:
+    - name: destroy the domain admin kerberos ticket
+      ansible.builtin.command:
+        cmd: kdestroy
+      changed_when: false
+      failed_when: false
+
+- name: secure the SQL Server keytab
+  ansible.builtin.file:
+    path: "{{ linux_sql_server_ad_keytab }}"
+    owner: mssql
+    group: mssql
+    mode: "0440"
+
+- name: read the SQL Server kerberos settings
+  ansible.builtin.command:
+    cmd: "{{ linux_sql_server_mssql_conf }} get network.{{ item }}"
+  loop:
+    - kerberoskeytabfile
+    - privilegedadaccount
+  register: linux_sql_server_ad_settings
+  changed_when: false
+  failed_when: false
+
+- name: configure SQL Server to use the keytab and privileged AD account
+  ansible.builtin.command:
+    cmd: "{{ linux_sql_server_mssql_conf }} set network.{{ item.0 }} {{ item.1 }}"
+  loop: "{{ ['kerberoskeytabfile', 'privilegedadaccount'] | zip([linux_sql_server_ad_keytab, linux_sql_server_ad_account]) }}"
+  loop_control:
+    label: "network.{{ item.0 }}"
+  changed_when: true
+  when: >-
+    (linux_sql_server_ad_settings.results
+     | selectattr('item', 'eq', item.0) | first).rc != 0
+    or item.1 not in (linux_sql_server_ad_settings.results
+     | selectattr('item', 'eq', item.0) | first).stdout
+  notify: restart mssql-server
+
+- name: flush SQL Server AD configuration handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: wait for SQL Server to accept TCP connections after AD configuration
+  ansible.builtin.wait_for:
+    port: "{{ linux_sql_server.tcp_port | default(1433) }}"
+    timeout: 300
+
+- name: read the SQL Server principals
+  ansible.builtin.command:
+    cmd: >-
+      {{ linux_sql_server_sqlcmd }}
+      -S localhost,{{ linux_sql_server.tcp_port | default(1433) }} -U sa -C -b -h -1
+      -Q "SET NOCOUNT ON; SELECT name FROM sys.server_principals;"
+  environment:
+    SQLCMDPASSWORD: "{{ linux_sql_server.sa_password }}"
+  register: linux_sql_server_principals
+  changed_when: false
+
+- name: create the AD sysadmin logins
+  ansible.builtin.command:
+    cmd: >-
+      {{ linux_sql_server_sqlcmd }}
+      -S localhost,{{ linux_sql_server.tcp_port | default(1433) }} -U sa -C -b
+      -Q "CREATE LOGIN [{{ item }}] FROM WINDOWS;
+      ALTER SERVER ROLE [sysadmin] ADD MEMBER [{{ item }}];"
+  environment:
+    SQLCMDPASSWORD: "{{ linux_sql_server.sa_password }}"
+  loop: >-
+    {{ linux_sql_server.ad_auth.sysadmin_logins
+       | default([domain.netbios_name ~ '\\' ~ domain.admin.username]) }}
+  changed_when: true
+  when: item not in linux_sql_server_principals.stdout
