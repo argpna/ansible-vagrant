@@ -58,6 +58,12 @@
   ansible.windows.win_powershell:
     script: |
       $ErrorActionPreference = 'Stop'
+      $key = 'HKLM:\SOFTWARE\WOW6432Node\WinFsp\Services\virtiofs'
+      $current = Get-ItemProperty -Path $key -ErrorAction SilentlyContinue
+      if ($current -and $current.Executable -eq '{{ windows_guest_tools_virtiofs_exe_path }}' -and $current.CommandLine -eq '-t %1 -m %2') {
+          $Ansible.Changed = $false
+          return
+      }
       & '{{ windows_guest_tools_winfsp_fsreg_path }}' virtiofs '{{ windows_guest_tools_virtiofs_exe_path }}' '-t %1 -m %2'
 
 - name: Render virtiofs mount script
@@ -91,6 +97,11 @@
   ansible.windows.win_powershell:
     script: |
       $ErrorActionPreference = 'Stop'
+      $drives = @({% for share in windows_extras.host_shares %}'{{ share.guest.drive }}\'{{ ', ' if not loop.last }}{% endfor %})
+      if (-not ($drives | Where-Object { -not (Test-Path $_) })) {
+          $Ansible.Changed = $false
+          return
+      }
       & '{{ windows_guest_tools_virtiofs_mount_script_path }}'
 
 - name: Disable default VirtioFsSvc auto-mount behavior
