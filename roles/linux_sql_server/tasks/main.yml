@@ -1,32 +1,18 @@
 ---
-- name: assert required SQL Server settings are present
+- name: resolve the requested SQL Server state
+  ansible.builtin.set_fact:
+    linux_sql_server_state: "{{ mssql_engine_state | default(linux_sql_server.state | default('present')) }}"
+
+- name: assert the requested state is supported
   ansible.builtin.assert:
     that:
-      - linux_sql_server.state | default('present') == 'present'
-      - linux_sql_server.version | int in [2019, 2022, 2025]
-      - linux_sql_server.accept_eula | bool
-      - linux_sql_server.sa_password is defined
-      - linux_sql_server.sa_password | length >= 8
-    fail_msg: >-
-      linux_sql_server must accept the EULA and define a supported SQL Server
-      version (2019, 2022 or 2025) and an sa password of at least 8 characters.
+      - linux_sql_server_state in ['present', 'absent']
+    fail_msg: "linux_sql_server state must be present or absent, got {{ linux_sql_server_state }}"
 
-- name: configure the Microsoft package repositories
-  ansible.builtin.include_tasks: repo.yml
+- name: install and configure SQL Server
+  ansible.builtin.include_tasks: present.yml
+  when: linux_sql_server_state == 'present'
 
-- name: install the SQL Server packages
-  ansible.builtin.include_tasks: install.yml
-
-- name: run the initial SQL Server configuration
-  ansible.builtin.include_tasks: setup.yml
-
-- name: configure SQL Server agent and availability group settings
-  ansible.builtin.include_tasks: configure.yml
-
-- name: configure Active Directory authentication
-  ansible.builtin.include_tasks: ad_auth.yml
-  when: linux_sql_server.ad_auth.enabled | default(false)
-
-- name: open SQL Server firewall ports
-  ansible.builtin.include_tasks: firewall.yml
-  when: linux_sql_server.manage_firewall | default(true)
+- name: remove SQL Server and its repositories
+  ansible.builtin.include_tasks: remove.yml
+  when: linux_sql_server_state == 'absent'

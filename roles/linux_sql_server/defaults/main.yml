@@ -4,7 +4,7 @@ linux_sql_server:  # noqa var-naming[no-role-prefix]
   version: "{{ sql_version | default(2022) }}"
   accept_eula: true
   edition: Developer
-  sa_password: VagrantPass1!
+  sa_password: "{{ mssql_sa_password | default('VagrantPass1!') }}"
   enable_agent: true
   hadr_enabled: false
   install_tools: true

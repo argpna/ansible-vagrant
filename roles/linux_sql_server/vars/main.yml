@@ -32,3 +32,15 @@ linux_sql_server_tools_packages_zypper:
 
 linux_sql_server_sqlcmd: /opt/mssql-tools18/bin/sqlcmd
 linux_sql_server_mssql_conf: /opt/mssql/bin/mssql-conf
+
+linux_sql_server_repo_dirs:
+  apt: /etc/apt/sources.list.d
+  dnf: /etc/yum.repos.d
+  zypper: /etc/zypp/repos.d
+linux_sql_server_repo_patterns:
+  apt: "*.list"
+  dnf: "*.repo"
+  zypper: "*.repo"
+linux_sql_server_apt_source_files:
+  - mssql-server-{{ linux_sql_server.version }}.list
+  - microsoft-prod.list

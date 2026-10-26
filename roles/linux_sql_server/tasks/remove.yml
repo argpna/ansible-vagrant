@@ -1,0 +1,68 @@
+---
+- name: stop and disable the mssql-server service
+  ansible.builtin.systemd_service:
+    name: mssql-server
+    enabled: false
+    state: stopped
+  failed_when: false
+
+# TODO: fix issue described in roles/linux_sql_server/tasks/repo.yml here as well.
+- name: find Microsoft repository files
+  ansible.builtin.find:
+    paths: "{{ linux_sql_server_repo_dirs[ansible_pkg_mgr] }}"
+    patterns: "{{ linux_sql_server_repo_patterns[ansible_pkg_mgr] }}"
+    contains: '.*packages\.microsoft\.com'
+  register: linux_sql_server_repo_files
+
+- name: remove Microsoft repository files
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ linux_sql_server_repo_files.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: remove the Microsoft package signing keys
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/keyrings/microsoft.asc
+    - "{{ linux_sql_server_apt_keyring }}"
+  when: ansible_pkg_mgr == 'apt'
+
+- name: build the package list to remove
+  ansible.builtin.set_fact:
+    linux_sql_server_remove_packages: >-
+      {{
+        ['mssql-server', 'mssql-server-ha']
+        + {
+          'apt': linux_sql_server_tools_packages_apt,
+          'dnf': linux_sql_server_tools_packages_dnf,
+          'zypper': linux_sql_server_tools_packages_zypper,
+        }[ansible_pkg_mgr]
+      }}
+
+- name: remove SQL Server packages on apt platforms
+  ansible.builtin.apt:
+    name: "{{ linux_sql_server_remove_packages }}"
+    state: absent
+    purge: true
+  when: ansible_pkg_mgr == 'apt'
+
+- name: remove SQL Server packages on dnf platforms
+  ansible.builtin.raw: dnf remove -y {{ linux_sql_server_remove_packages | join(' ') }}
+  register: linux_sql_server_dnf_remove
+  changed_when: "'Removed' in linux_sql_server_dnf_remove.stdout"
+  when: ansible_pkg_mgr == 'dnf'
+
+- name: remove SQL Server packages on zypper platforms
+  ansible.builtin.raw: zypper --non-interactive remove {{ linux_sql_server_remove_packages | join(' ') }}
+  register: linux_sql_server_zypper_remove
+  changed_when: "'Removing' in linux_sql_server_zypper_remove.stdout"
+  when: ansible_pkg_mgr == 'zypper'
+
+- name: remove the SQL Server state directory
+  ansible.builtin.file:
+    path: /var/opt/mssql
+    state: absent

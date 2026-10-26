@@ -15,6 +15,12 @@ Supported package managers:
   dnf python bindings are unavailable under the python3.9 interpreter)
 * `zypper` - openSUSE Leap 15 via the SLES 15 repos (best effort)
 
+## Removing SQL Server
+
+With `-e mssql_engine_state=absent` (or `linux_sql_server.state: absent`) the role stops
+the service, removes the SQL Server and tool packages, `/var/opt/mssql`, and
+Microsoft package repository file and signing key to return the host to a clean state.
+
 ## Variables
 
 All settings live in a single `linux_sql_server` dict (see
@@ -26,7 +32,8 @@ entirely, so declare every key.
 * `accept_eula`: Must be `true`; forwarded to the package install and
   `mssql-conf setup`.
 * `edition`: `MSSQL_PID` value passed to setup (default `Developer`).
-* `sa_password`: SA password used for the unattended setup.
+* `sa_password`: SA password used for the unattended setup. Defaults to `mssql_sa_password`
+  when that variable is passed, otherwise the lab default.
 * `enable_agent`: Enable the SQL Server Agent (`sqlagent.enabled`).
 * `hadr_enabled`: Enable availability groups (`hadr.hadrenabled`). Set on the
   `mssql_linux_ag` group.

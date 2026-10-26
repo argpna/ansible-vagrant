@@ -2,6 +2,27 @@
 - name: configure Microsoft apt repositories
   when: ansible_pkg_mgr == 'apt'
   block:
+    # apt fails to run when two sources for the same URL name different Signed-By
+    # keys. The issue is argpna.mssql collection's install module also writes a
+    # packages.microsoft.com source
+    # TODO: This role and the collection should use one key path and
+    # source file so we don't need the find and remove source tasks below.
+    - name: find Microsoft apt sources
+      ansible.builtin.find:
+        paths: /etc/apt/sources.list.d
+        patterns: "*.list"
+        contains: '.*packages\.microsoft\.com'
+      register: linux_sql_server_apt_sources
+
+    - name: remove Microsoft apt sources written by other tools
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ linux_sql_server_apt_sources.files }}"
+      loop_control:
+        label: "{{ item.path }}"
+      when: item.path | basename not in linux_sql_server_apt_source_files
+
     - name: ensure the apt keyring directory exists
       ansible.builtin.file:
         path: /etc/apt/keyrings

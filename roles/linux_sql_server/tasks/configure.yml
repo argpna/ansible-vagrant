@@ -1,7 +1,7 @@
 ---
 - name: read the SQL Server agent setting
   ansible.builtin.command:
-    cmd: "{{ linux_sql_server_mssql_conf }} get sqlagent.enabled"
+    cmd: "{{ linux_sql_server_mssql_conf }} get sqlagent enabled"
   register: linux_sql_server_agent_setting
   changed_when: false
   failed_when: false
@@ -18,7 +18,7 @@
 
 - name: read the SQL Server availability group setting
   ansible.builtin.command:
-    cmd: "{{ linux_sql_server_mssql_conf }} get hadr.hadrenabled"
+    cmd: "{{ linux_sql_server_mssql_conf }} get hadr hadrenabled"
   register: linux_sql_server_hadr_setting
   changed_when: false
   failed_when: false
