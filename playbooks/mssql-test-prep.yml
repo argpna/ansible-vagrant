@@ -1,0 +1,62 @@
+---
+# Usage examples:
+#   ansible-playbook playbooks/mssql-test-prep.yml
+#   ansible-playbook playbooks/mssql-test-prep.yml --limit win2022-sql2022
+#   ansible-playbook playbooks/mssql-test-prep.yml --limit opensuse15-sql2022
+#
+- name: prepare MSSQL Linux hosts for the integration suites
+  hosts: mssql_linux_matrix:mssql_linux_unsupported
+  gather_facts: false
+  become: true
+
+  tasks:
+    # raw: the interpreter these hosts need may not be installed yet
+    - name: wait for the host to accept commands
+      ansible.builtin.raw: "true"
+      register: mssql_test_prep_ready
+      until: mssql_test_prep_ready is succeeded
+      retries: 30
+      delay: 5
+      changed_when: false
+
+    - name: install the python interpreter the inventory expects
+      ansible.builtin.raw: >-
+        test -x {{ ansible_python_interpreter }} ||
+        { {{ {'dnf': 'dnf install -y', 'zypper': 'zypper --non-interactive install -y'}[bootstrap_python.manager] }}
+        {{ bootstrap_python.package }} && echo python-installed; }
+      register: mssql_test_prep_python
+      changed_when: "'python-installed' in mssql_test_prep_python.stdout"
+      when: bootstrap_python is defined
+
+- name: prepare MSSQL Windows matrix hosts for the integration suites
+  hosts: mssql_windows_matrix
+  gather_facts: false
+
+  tasks:
+    - name: require the install media on the libvirt host
+      ansible.builtin.include_role:
+        name: windows_sql_media
+        tasks_from: preflight
+
+    - name: attach host shares on the libvirt host
+      delegate_to: localhost
+      become: true
+      when:
+        - windows_extras.host_shares | default([]) | length > 0
+      block:
+        - name: run libvirt host shares role
+          ansible.builtin.include_role:
+            name: libvirt_host_share
+          vars:
+            libvirt_host_share_list: "{{ windows_extras.host_shares | default([]) }}"
+
+    - name: wait for the Windows guest connection
+      ansible.builtin.wait_for_connection:
+
+    - name: install guest tools and mount the host shares
+      ansible.builtin.include_role:
+        name: windows_guest_tools
+
+    - name: stage install media on guest-local storage
+      ansible.builtin.include_role:
+        name: windows_sql_media

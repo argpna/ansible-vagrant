@@ -78,3 +78,15 @@
   tags:
     - never
     - windows_openssh
+
+- name: import mssql test prep playbook
+  ansible.builtin.import_playbook: mssql-test-prep.yml
+  tags:
+    - never
+    - mssql_test_prep
+
+- name: import mssql engine playbook
+  ansible.builtin.import_playbook: mssql-engine.yml
+  tags:
+    - never
+    - mssql_engine

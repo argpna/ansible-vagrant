@@ -1,0 +1,39 @@
+---
+# Usage examples:
+#   ansible-playbook playbooks/mssql-engine.yml
+#   ansible-playbook playbooks/mssql-engine.yml --limit win2022-sql2022
+#   ansible-playbook playbooks/mssql-engine.yml --limit ubuntu2204-sql2022
+#   ansible-playbook playbooks/mssql-engine.yml --limit ubuntu2204-sql2022 -e mssql_engine_state=absent
+#
+- name: install SQL Server on MSSQL Linux management hosts
+  hosts: mssql_manage_targets:&linux
+  become: true
+  gather_facts: true
+  module_defaults:
+    ansible.builtin.apt:
+      update_cache: true
+      cache_valid_time: 3600
+
+  pre_tasks:
+    - name: wait for MSSQL Linux host connection
+      ansible.builtin.wait_for_connection:
+
+  roles:
+    - role: linux_sql_server
+
+- name: install SQL Server on MSSQL Windows management hosts
+  hosts: mssql_manage_targets:&windows
+  gather_facts: false
+
+  pre_tasks:
+    - name: wait for MSSQL Windows host connection
+      ansible.builtin.wait_for_connection:
+
+  tasks:
+    - name: require the staged install media
+      ansible.builtin.include_role:
+        name: windows_sql_media
+
+    - name: install SQL Server from the staged ISO
+      ansible.builtin.include_role:
+        name: windows_sql_server
