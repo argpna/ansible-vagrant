@@ -82,7 +82,7 @@ Vagrant.configure('2') do |config|
     unknown_attached_interfaces = attached_interface_names - declared_interface_names
     attached_interfaces = declared_interfaces.select { |network_interface| attached_interface_names.include?(network_interface['name']) }
     attached_network_names = attached_interfaces.map { |network_interface| (network_interface['network_name'] || network_interface['network']).to_s }.reject(&:empty?).uniq
-    bootstrap_python39 = resolved.dig('vars', 'bootstrap_python39')
+    bootstrap_python = resolved.dig('vars', 'bootstrap_python')
 
     raise "Host #{name}: os required" if os.to_s.empty?
     raise "Host #{name}: vagrant_box required" if box.to_s.empty?
@@ -133,11 +133,16 @@ Vagrant.configure('2') do |config|
 
       ProviderOptions.apply_sync_folders(vm, name, provider)
 
-      # for rhel-8
-      if bootstrap_python39
-        vm.vm.provision 'shell', name: 'bootstrap python3.9', inline: <<~SHELL
-          if ! test -x /usr/bin/python3.9; then
-            dnf install -y python39
+      # hosts whose default python is too old for Ansible modules
+      if bootstrap_python
+        python_install = {
+          'dnf' => 'dnf install -y',
+          'zypper' => 'zypper --non-interactive install -y'
+        }.fetch(bootstrap_python['manager'])
+        python_interpreter = resolved.dig('vars', 'ansible_python_interpreter')
+        vm.vm.provision 'shell', name: 'bootstrap python', inline: <<~SHELL
+          if ! test -x #{python_interpreter}; then
+            #{python_install} #{bootstrap_python['package']}
           fi
         SHELL
       end
