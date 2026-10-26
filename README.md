@@ -1,13 +1,13 @@
 # Ansible & Vagrant
 
 > [!NOTE]
-> This repo is based on [jborean93/ansible-windows](https://github.com/jborean93/ansible-windows), but has been reworked for Vagrant with the libvirt provider.
+> This repo is based on [jborean93/ansible-windows](https://github.com/jborean93/ansible-windows),
+> but has been reworked for Vagrant with the libvirt provider.
 
-This repo contains Ansible roles, playbooks and a libvirt-backed Vagrant workflow to
-build and manage Windows and Linux VMs (weighted more towards mssql infrastructure).
-
-It can also be used as a general-purpose infrastructure repository when Vagrant provisioning
-is omitted.
+This repo contains Ansible roles, playbooks and a libvirt-backed Vagrant
+workflow to build and manage Windows and Linux VMs (primarily for MSSQL
+infrastructure). But it can also be used as a general-purpose infrastructure
+repository when Vagrant provisioning is omitted.
 
 ## Requires
 
@@ -15,13 +15,10 @@ is omitted.
 * libvirt
 * the `vagrant-libvirt` plugin
 * Python 3 on the host system running Vagrant
-* Ansible on the host system running Vagrant, either from your existing setup or from the optional repo-local host virtualenv
+* Ansible on the host system running Vagrant, either from your existing
+  setup or from the optional repo-local host virtualenv
 
 ## Host Ansible Setup
-
-> [!NOTE]
-> If you already have a working host Ansible setup, you can keep using it
-> and skip this step.
 
 This repo includes a minimal host bootstrap that creates `.venv`,
 installs the pinned Ansible and Python packages from
@@ -33,33 +30,31 @@ collections from [requirements-host.yml](requirements-host.yml):
 source .venv/bin/activate
 ```
 
-This host `.venv` is only for bootstrapping and host-side execution. The repo's
+The host `.venv` is only for bootstrapping and host-side execution. The repo's
 primary Ansible toolchain still lives inside the control node VM at
 `/home/ansible/controller-venv`.
 
-To use that in-VM toolchain after the control node is provisioned:
+To use the in-VM toolchain, run:
 
 ```bash
+vagrant up ansible-con-01 --provision
 vagrant ssh ansible-con-01
 enter-ansible-env
 ```
 
 `enter-ansible-env` switches to the controller admin user and activates the
-control-node virtualenv for that shell.
-
-This repo needs Ansible on the host to drive `vagrant up --provision` and any
-direct host-side `ansible-playbook` runs.
+control-node virtualenv.
 
 ## Provisioning
 
 This repo provisions the lab from the dynamic inventory in
 [inventory/inventory.py](inventory/inventory.py), which resolves host data from
 [inventory/hosts.yml](inventory/hosts.yml), [inventory/hosts.d](inventory/hosts.d),
-and [inventory/group_vars](inventory/group_vars). Vagrant uses that resolved
+and [inventory/group_vars](inventory/group_vars). Vagrant uses the resolved
 inventory to run [playbooks/main.yml](playbooks/main.yml) against the selected
-hosts with the appropriate Ansible host limit.
+hosts with the appropriate Ansible host `--limit`.
 
-The provisioning flow covers:
+The provisioning flow creates:
 
 * A Linux control node for Ansible and module development work
 * Standalone Linux hosts
@@ -77,8 +72,7 @@ depending on the base VM Python environment.
 > [!NOTE]
 > If you only want to spin up standalone Vagrant hosts and do not need the
 > Ansible control-node workflow or the lab domain setup, use `--no-provision`
-> with `vagrant up`. This skips guest provisioning, but Vagrant still ensures
-> the selected host's libvirt networks exist on the host first.
+> with `vagrant up`.
 
 
 ## Inventory Layout
@@ -96,14 +90,27 @@ The inventory is organized by host role:
 * `mssql_windows_matrix` -
   standalone Windows MSSQL install validation matrix
 * `mssql_linux_matrix` -
-  Linux MSSQL install validation matrix, with `mssql_linux_apt`, `mssql_linux_dnf`, and `mssql_linux_unsupported` subgroups
+  Linux MSSQL install validation matrix, with `mssql_linux_apt` and `mssql_linux_dnf` subgroups
+* `mssql_linux_unsupported` -
+  Linux hosts on platforms SQL Server does not support, used for negative tests
 * `mssql_windows_ag` -
   Windows SQL Server availability group test nodes using WSFC
 * `mssql_linux_ag` -
   Linux SQL Server availability group test nodes
 
+Groups for `argpna.mssql` integration test suites:
+
+* `mssql_install_targets` -
+  supported matrix hosts for the install and remove suites (SQL Server features and options)
+* `mssql_manage_targets` -
+  hosts for the management suite (expects a running engine). The group lists one host
+  per SQL Server version and OS family
+
 Core hosts live in `inventory/hosts.yml`. MSSQL host definitions live in
-`inventory/hosts.d/mssql_linux.yml` and `inventory/hosts.d/mssql_windows.yml`, and `inventory.py` exposes the inventory to Ansible and Vagrant.
+`inventory/hosts.d/mssql_linux.yml` and `inventory/hosts.d/mssql_windows.yml`, and the
+`argpna.mssql` test suite groups in `inventory/hosts.d/mssql_targets.yml`. `inventory.py`
+exposes the inventory to Ansible and Vagrant. A host can only be defined in a single group,
+but the same host can be referenced elsewhere (another group for example) under `members`.
 
 Shared lab settings live in group vars:
 
@@ -118,14 +125,16 @@ Shared lab settings live in group vars:
 * [mssql_windows_ag.yml](inventory/group_vars/mssql_windows_ag.yml) -
   MSSQL cluster, availability groups topology settings
 * [mssql_linux_ag.yml](inventory/group_vars/mssql_linux_ag.yml) -
-  Linux SQL Server install settings, Pacemaker cluster settings, and availability group topology
+  Linux SQL Server install settings, Pacemaker cluster settings, and
+  availability group topology
 
 Two singleton groups are assumed by the playbooks:
 
 * `control_node`
 * `domain_controller`
 
-The playbooks assert that each of those groups contains exactly one host at the moment.
+The playbooks assert that each of those groups contains exactly one host at
+the moment.
 
 ## Role Map
 
@@ -177,11 +186,11 @@ These roles build the Windows lab platform itself before SQL Server or WSFC
 work starts.
 
 * [windows_domain_controller](roles/windows_domain_controller/README.md) -
-  points DNS at localhost, promotes the host to a domain controller, creates
-  the initial domain admin, and validates that identity
+  points DNS at localhost, promotes the host to a domain controller, and creates
+  the initial domain admin
 * [windows_domain_member](roles/windows_domain_member/README.md) -
-  points member hosts at the DC for DNS, joins them to the domain, reboots when
-  needed, and validates domain logon
+  points member hosts at the DC for DNS, joins them to the domain, and reboot the
+  hosts if needed
 * [windows_adcs](roles/windows_adcs/README.md) -
   installs the CA, publishes the auto-enrollment template, configures the GPO,
   and exports the CA chain
@@ -210,11 +219,22 @@ These roles are the SQL Server and WSFC-focused part of the repo.
   exposes operation-specific WSFC entrypoints such as prerequisites, file share
   witness, and cluster creation instead of forcing everything through one large
   cluster task file
+* [windows_sql_media](roles/windows_sql_media/README.md) -
+  stages SQL Server install media and the SSMS installer from the mounted host
+  share to fixed guest-local paths
 
 Primary playbooks:
 
 * [windows-sql-server.yml](playbooks/windows-sql-server.yml)
 * [windows-failover-cluster.yml](playbooks/windows-failover-cluster.yml)
+* [mssql-test-prep.yml](playbooks/mssql-test-prep.yml) -
+  attaches and mounts the host shares and stages media on the Windows matrix hosts, and
+  installs the python interpreter a Linux matrix host's inventory entry expects
+* [mssql-engine.yml](playbooks/mssql-engine.yml) -
+  installs a standalone SQL Server with mixed mode authentication on the
+  `mssql_manage_targets` hosts, using the shared `mssql_sa_password` when passed;
+  with `-e mssql_engine_state=absent` it removes the engine and returns the host
+  to a clean state
 
 ### Linux SQL and cluster roles
 
@@ -265,11 +285,15 @@ The control-node playbook is [controller-node.yml](playbooks/controller-node.yml
 which produces:
 
 * A Linux admin user (with passwordless sudo)
-* Kerberos and DNS configuration so the control node can resolve and reach the AD lab
-* A Python runtime built from source (to avoid distro-specific package related complexities)
+* Kerberos and DNS configuration so the control node can resolve and reach
+  the AD lab
+* A Python runtime built from source (to avoid distro-specific package
+  related complexities)
 * A control-node virtualenv at `/home/ansible/controller-venv`
-* `ansible`, `pypsrp`, `pywinrm`, `requests-kerberos`, `requests-credssp`, and `gssapi` installed inside that virtualenv
-* `/usr/local/bin/enter-ansible-env`, which switches to the controller admin user and activates the control-node virtualenv
+* `ansible`, `pypsrp`, `pywinrm`, `requests-kerberos`, `requests-credssp`,
+  and `gssapi` installed inside that virtualenv
+* `/usr/local/bin/enter-ansible-env`, which switches to the controller admin
+  user and activates the control-node virtualenv
 
 Current control-node defaults from [control_node.yml](inventory/group_vars/control_node.yml):
 
@@ -302,7 +326,12 @@ The Windows flow uses:
 * [windows_winrm_cert](roles/windows_winrm_cert/README.md)
   enroll/select the correct machine certificate and rebind the WinRM HTTPS listener
 
-When AD CS is enabled, [windows-certificates.yml](playbooks/windows-certificates.yml) also writes [ca_chain.pem](ca_chain.pem) in the repo root. The Windows connection defaults use that file to switch PSRP from certificate validation `ignore` during bootstrap to validated HTTPS once the lab CA chain is available. After the chain exists locally, PSRP connects to the Windows host FQDN instead of the inventory IP so the WinRM listener certificate can be validated against its DNS SAN.
+When AD CS is enabled, [windows-certificates.yml](playbooks/windows-certificates.yml)
+also writes [ca_chain.pem](ca_chain.pem) in the repo root. The Windows connection
+defaults use the pem file to switch PSRP from certificate validation `ignore` during
+bootstrap to validated HTTPS once the lab CA chain is available. After the chain
+exists locally, PSRP connects to the Windows host FQDN instead of the inventory IP
+so the WinRM listener certificate can be validated against its DNS SAN.
 
 ## Optional Windows Utilities
 
@@ -315,16 +344,22 @@ Additional utility playbooks are available:
 
 When running [main.yml](playbooks/main.yml), the guest-tools and OpenSSH utility
 imports are tagged `never`. Run them explicitly with `--tags windows_guest_tools`
-or `--tags windows_openssh` when you want those utility flows included. The Linux
-domain member, SQL Server, and Pacemaker cluster imports are tagged `never` the
-same way and run with `--tags linux_domain_members`, `--tags linux_sql_server`,
-or `--tags linux_pacemaker_cluster`.
+or `--tags windows_openssh` when you want those utility flows included.
+
+> [!NOTE]
+> The Linux domain member, SQL Server, and Pacemaker cluster imports are tagged `never`
+> the same way and run with `--tags linux_domain_members`, `--tags linux_sql_server`, or
+> `--tags linux_pacemaker_cluster`. The MSSQL test prep and engine imports are also tagged
+> `never` and can be run with `--tags mssql_test_prep` and `--tags mssql_engine`.
 
 ## Provider Options
 
-Provider settings are inventory-driven. The Vagrant provider helper currently accepts: `cpus`, `memory_mb`, `cpu_mode`, `nic_model`, `video_type`, `graphics`, `memory_backing`, `sync_folders`
+Provider settings are inventory-driven. The Vagrant provider helper currently accepts:
+`cpus`, `memory_mb`, `cpu_mode`, `nic_model`, `video_type`, `graphics`, `memory_backing`,
+`sync_folders`
 
-Additional options can be included by extending `ProviderOptions::ALLOWED` in [provider_options.rb](vagrant/lib/provider_options.rb).
+Additional options can be included by extending `ProviderOptions::ALLOWED` in
+[provider_options.rb](vagrant/lib/provider_options.rb).
 
 For example, to add support for CPU topology
 
@@ -362,15 +397,20 @@ provider_options:
   ...
 ```
 
-Better validation, error handling etc can be added as needed. The idea is to keep things flexible and let the inventory drive what gets exposed.
+Better validation, error handling etc can be added as needed. The idea is to keep
+things flexible and let the inventory drive what gets exposed.
 
 > [!NOTE]
 > Vagrant libvirt documentation reference can be found
 > [here](https://vagrant-libvirt.github.io/vagrant-libvirt/configuration.html)
 
-Global defaults come from [inventory/group_vars/all](inventory/group_vars/all), with Linux and Windows overlays from [linux.yml](inventory/group_vars/linux.yml) and [windows.yml](inventory/group_vars/windows.yml). Host-level `provider_options` override those merged defaults.
+Global defaults come from [inventory/group_vars/all](inventory/group_vars/all),
+with Linux and Windows overlays from [linux.yml](inventory/group_vars/linux.yml)
+and [windows.yml](inventory/group_vars/windows.yml). Host-level `provider_options`
+override those merged defaults.
 
-Linux sync-folder defaults currently enable read-write `virtiofs` for the repo root at `/vagrant`.
+Linux sync-folder defaults currently enable read-write `virtiofs` for the repo
+root at `/vagrant`.
 
 ## Vagrant Networking
 
@@ -399,7 +439,7 @@ vagrant up ansible-con-01 --provision
 Bring up multiple hosts:
 
 ```sh
-vagrant up domain-con-01 win-cluster-n01 --provision
+vagrant up domain-con-01 domain-con-01 --provision
 ```
 
 Select targets with `VAGRANT_GROUP`:
