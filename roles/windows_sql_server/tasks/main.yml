@@ -1,6 +1,18 @@
 ---
-- name: manage SQL Server service accounts
-  ansible.builtin.import_tasks: service_accounts.yml
+- name: resolve the requested SQL Server state
+  ansible.builtin.set_fact:
+    windows_sql_server_state: "{{ mssql_engine_state | default(windows_sql_server.state | default('present')) }}"
+
+- name: assert the requested state is supported
+  ansible.builtin.assert:
+    that:
+      - windows_sql_server_state in ['present', 'absent']
+    fail_msg: "windows_sql_server state must be present or absent, got {{ windows_sql_server_state }}"
 
 - name: install SQL Server
-  ansible.builtin.import_tasks: install.yml
+  ansible.builtin.include_tasks: present.yml
+  when: windows_sql_server_state == 'present'
+
+- name: remove SQL Server
+  ansible.builtin.include_tasks: remove.yml
+  when: windows_sql_server_state == 'absent'

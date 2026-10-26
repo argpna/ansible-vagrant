@@ -1,0 +1,19 @@
+---
+- name: check for a pending reboot
+  ansible.windows.win_powershell:
+    script: |
+      $Ansible.Changed = $false
+      $keys = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending',
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired'
+      )
+      $pending = [bool]($keys | Where-Object { Test-Path $_ })
+      $session = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' `
+        -Name PendingFileRenameOperations -ErrorAction SilentlyContinue
+      if ($session -and $session.PendingFileRenameOperations) { $pending = $true }
+      $pending
+  register: windows_sql_server_pending_reboot
+
+- name: reboot to clear the pending restart
+  ansible.windows.win_reboot:
+  when: windows_sql_server_pending_reboot.output | first

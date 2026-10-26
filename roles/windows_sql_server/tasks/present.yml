@@ -1,0 +1,13 @@
+---
+- name: clear any pending reboot before installing
+  ansible.builtin.include_tasks: reboot_pending.yml
+
+- name: manage SQL Server service accounts
+  ansible.builtin.import_tasks: service_accounts.yml
+
+- name: install SQL Server
+  ansible.builtin.import_tasks: install.yml
+
+- name: open the SQL Server firewall port
+  ansible.builtin.import_tasks: firewall.yml
+  when: windows_sql_server.manage_firewall | default(false)

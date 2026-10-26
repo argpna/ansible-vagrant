@@ -1,0 +1,11 @@
+---
+- name: allow inbound SQL Server connections
+  community.windows.win_firewall_rule:
+    name: "SQL Server {{ windows_sql_server.tcp_port | default(1433) }}"
+    localport: "{{ windows_sql_server.tcp_port | default(1433) }}"
+    protocol: tcp
+    direction: in
+    action: allow
+    state: present
+    enabled: true
+    profiles: [domain, private, public]

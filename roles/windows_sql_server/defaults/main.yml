@@ -2,6 +2,7 @@
 windows_sql_server:  # noqa var-naming[no-role-prefix]
   state: present
   media_path: null
+  media_iso_path: null
   instance_name: MSSQLSERVER
   features:
     - SQLEngine
@@ -32,3 +33,5 @@ windows_sql_server:  # noqa var-naming[no-role-prefix]
   sql_temp_db_dir: null
   sql_temp_db_log_dir: null
   reboot_if_required: true
+  manage_firewall: false
+  tcp_port: 1433
