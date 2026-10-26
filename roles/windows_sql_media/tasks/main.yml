@@ -1,0 +1,19 @@
+---
+- name: stage the SQL Server ISO
+  ansible.builtin.include_tasks: stage.yml
+  vars:
+    windows_sql_media_label: SQL Server ISO
+    windows_sql_media_source: "{{ windows_sql_media_share_root }}{{ windows_sql_media_iso_filename }}"
+    windows_sql_media_dest: "{{ windows_sql_media_iso_path }}"
+
+- name: stage the SSMS installer
+  ansible.builtin.include_tasks: stage.yml
+  vars:
+    windows_sql_media_label: SSMS installer
+    windows_sql_media_source: "{{ windows_sql_media_ssms_share_root }}{{ windows_sql_media_ssms_filename }}"
+    windows_sql_media_dest: "{{ windows_sql_media_ssms_path }}"
+  when: windows_sql_media_ssms_enabled | bool
+
+- name: record the staged ISO path for later plays and roles
+  ansible.builtin.set_fact:
+    windows_sql_media_staged_iso_path: "{{ windows_sql_media_iso_path }}"

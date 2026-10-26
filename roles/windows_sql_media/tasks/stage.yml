@@ -1,0 +1,37 @@
+---
+- name: inspect the staged media - {{ windows_sql_media_label }}
+  ansible.windows.win_stat:
+    path: "{{ windows_sql_media_dest }}"
+    get_checksum: false
+  register: windows_sql_media_dest_stat
+
+- name: inspect the media on the host share - {{ windows_sql_media_label }}
+  ansible.windows.win_stat:
+    path: "{{ windows_sql_media_source }}"
+    get_checksum: false
+  register: windows_sql_media_source_stat
+
+- name: require the media to be staged or on the host share - {{ windows_sql_media_label }}
+  ansible.builtin.assert:
+    that:
+      - windows_sql_media_dest_stat.stat.exists or windows_sql_media_source_stat.stat.exists
+    fail_msg: >-
+      {{ windows_sql_media_label }} is neither staged at {{ windows_sql_media_dest }}
+      nor available on the host share at {{ windows_sql_media_source }} on {{ inventory_hostname }}.
+      Run the share and guest tools steps first (playbooks/mssql-test-prep.yml does this).
+
+- name: ensure the media stage directory exists
+  ansible.windows.win_file:
+    path: "{{ windows_sql_media_dest | win_dirname }}"
+    state: directory
+
+- name: copy the media to guest-local storage - {{ windows_sql_media_label }}
+  community.windows.win_robocopy:
+    src: "{{ windows_sql_media_source | win_dirname }}"
+    dest: "{{ windows_sql_media_dest | win_dirname }}"
+    flags: "{{ windows_sql_media_source | win_basename }}"
+  when:
+    - windows_sql_media_source_stat.stat.exists
+    - >-
+      not windows_sql_media_dest_stat.stat.exists
+      or windows_sql_media_dest_stat.stat.size != windows_sql_media_source_stat.stat.size

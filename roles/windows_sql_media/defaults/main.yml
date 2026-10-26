@@ -1,0 +1,12 @@
+---
+windows_sql_media_version: "{{ sql_version | default(2022) }}"
+
+# Drive roots of the host shares inside the guest (see windows_extras.host_shares)
+windows_sql_media_share_root: 'S:\'
+windows_sql_media_iso_filename: "SQLServer{{ windows_sql_media_version }}-x64-ENU.iso"
+windows_sql_media_iso_path: 'C:\temp\mssql-{{ windows_sql_media_version }}\{{ windows_sql_media_iso_filename }}'
+
+windows_sql_media_ssms_enabled: false
+windows_sql_media_ssms_share_root: 'T:\'
+windows_sql_media_ssms_filename: vs_SSMS.exe
+windows_sql_media_ssms_path: 'C:\temp\ssms-22\{{ windows_sql_media_ssms_filename }}'

@@ -1,0 +1,16 @@
+---
+# Runs on the libvirt host so missing media fails before any guest work.
+- name: check the SQL Server ISO on the libvirt host
+  ansible.builtin.include_tasks: preflight_file.yml
+  vars:
+    windows_sql_media_label: SQL Server ISO
+    windows_sql_media_drive: "{{ windows_sql_media_share_root[:2] }}"
+    windows_sql_media_filename: "{{ windows_sql_media_iso_filename }}"
+
+- name: check the SSMS installer on the libvirt host
+  ansible.builtin.include_tasks: preflight_file.yml
+  vars:
+    windows_sql_media_label: SSMS installer
+    windows_sql_media_drive: "{{ windows_sql_media_ssms_share_root[:2] }}"
+    windows_sql_media_filename: "{{ windows_sql_media_ssms_filename }}"
+  when: windows_sql_media_ssms_enabled | bool

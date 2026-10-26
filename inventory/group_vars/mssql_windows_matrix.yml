@@ -1,0 +1,20 @@
+windows_sql_media_ssms_enabled: true
+
+windows_sql_server:
+  state: present
+  media_path: null
+  media_iso_path: "{{ windows_sql_media_staged_iso_path | default('') }}"
+  instance_name: MSSQLSERVER
+  features:
+    - SQLEngine
+  service_accounts:
+    manage: false
+  sqlsysadminaccounts:
+    - BUILTIN\Administrators
+  security_mode: SQL
+  sa_password: "{{ mssql_sa_password | default('VagrantPass1!') }}"
+  browser_startup_type: Disabled
+  update_enabled: false
+  reboot_if_required: true
+  manage_firewall: true
+  tcp_port: 1433

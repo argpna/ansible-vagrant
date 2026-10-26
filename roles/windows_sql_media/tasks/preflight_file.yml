@@ -1,0 +1,32 @@
+---
+- name: find the host share mapped to drive {{ windows_sql_media_drive }}
+  ansible.builtin.set_fact:
+    windows_sql_media_shares: >-
+      {{
+        windows_extras.host_shares | default([])
+        | selectattr('guest.drive', 'equalto', windows_sql_media_drive)
+        | list
+      }}
+
+- name: require a host share for the media - {{ windows_sql_media_label }}
+  ansible.builtin.assert:
+    that:
+      - windows_sql_media_shares | length == 1
+    fail_msg: >-
+      {{ inventory_hostname }} needs exactly one windows_extras.host_shares entry with
+      guest.drive {{ windows_sql_media_drive }} for the {{ windows_sql_media_label }}.
+
+- name: inspect the media on the libvirt host - {{ windows_sql_media_label }}
+  ansible.builtin.stat:
+    path: "{{ windows_sql_media_shares[0].source | regex_replace('/+$', '') }}/{{ windows_sql_media_filename }}"
+  register: windows_sql_media_host_stat
+  delegate_to: localhost
+
+- name: require the media on the libvirt host - {{ windows_sql_media_label }}
+  ansible.builtin.assert:
+    that:
+      - windows_sql_media_host_stat.stat.exists
+    fail_msg: >-
+      {{ windows_sql_media_label }} not found at
+      {{ windows_sql_media_shares[0].source | regex_replace('/+$', '') }}/{{ windows_sql_media_filename }}
+      on the libvirt host (needed by {{ inventory_hostname }}).
