@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Dynamic inventory for the lab.
 
-This module is the single resolver for the raw inventory layout. Downstream
+This module is the resolver for the raw inventory layout. Downstream
 consumers should use the resolved host data from --list / --host instead of
 depending on the structure of inventory/hosts.yml.
 
@@ -156,7 +156,9 @@ def build_group_graph(inventory: dict[str, Any], group_vars: dict[str, dict[str,
     seen_host_defs: dict[str, str] = {}
 
     def ensure_group(group_name: str) -> dict[str, Any]:
-        return groups.setdefault(group_name, {"vars": {}, "hosts": {}, "children": set(), "parents": set()})
+        return groups.setdefault(
+            group_name, {"vars": {}, "hosts": {}, "members": set(), "children": set(), "parents": set()}
+        )
 
     def walk(node: Any, group_name: str, parent_name: str | None = None) -> None:
         if not isinstance(node, dict):
@@ -181,6 +183,10 @@ def build_group_graph(inventory: dict[str, Any], group_vars: dict[str, dict[str,
                 seen_host_defs[host_name] = group_name
                 group["hosts"][host_name] = copy.deepcopy(host_vars or {})
 
+        members = node.get("members")
+        if isinstance(members, list):
+            group["members"].update(str(item) for item in members)
+
         children = node.get("children")
         if isinstance(children, dict):
             for child_name, child in children.items():
@@ -189,7 +195,13 @@ def build_group_graph(inventory: dict[str, Any], group_vars: dict[str, dict[str,
     walk(inventory.get("all", inventory), "all")
 
     for group_name, group in groups.items():
+        unknown = sorted(group["members"] - set(seen_host_defs))
+        if unknown:
+            raise InventoryValidationError(
+                f"Group {group_name!r}: members reference undefined hosts: {', '.join(unknown)}"
+            )
         group["vars"] = merge_hash(group_vars.get(group_name), group["vars"])
+        group["members"] = sorted(group["members"])
         group["children"] = sorted(group["children"])
         group["parents"] = sorted(group["parents"])
 
@@ -227,14 +239,22 @@ def flatten_hosts(group_graph: dict[str, dict[str, Any]]) -> dict[str, dict[str,
     """Flatten the group graph into per-host vars and memberships.
 
     Host vars are built by merging ancestor group vars, direct group vars, and
-    host-local vars in that order.
+    host-local vars in that order. Groups that list a host under `members`
+    count as direct groups of that host (even though the host is defined elsewhere).
     """
     hosts: dict[str, dict[str, Any]] = {}
     depths = group_depths(group_graph)
+    member_of: dict[str, set[str]] = {}
+    for group_name, group in group_graph.items():
+        for host_name in group.get("members", []):
+            member_of.setdefault(host_name, set()).add(group_name)
 
     for group_name, group in group_graph.items():
         for host_name, host_vars in group.get("hosts", {}).items():
-            host_groups = ancestor_groups(group_graph, group_name) | {group_name}
+            direct_groups = {group_name} | member_of.get(host_name, set())
+            host_groups = set(direct_groups)
+            for direct in direct_groups:
+                host_groups |= ancestor_groups(group_graph, direct)
             var_groups = sorted(host_groups, key=lambda item: (depths.get(item, 999), item))
 
             merged_vars: dict[str, Any] = {}
@@ -396,6 +416,9 @@ def validate_host_contract(host_name: str, host: dict[str, Any], host_groups: li
         if not sql_interfaces:
             raise InventoryValidationError(f"Host {host_name}: members of mssql_windows_ag must define at least one role='sql' interface")
 
+    if "mssql_manage_targets" in host_groups and not host.get("sql_version"):
+        raise InventoryValidationError(f"Host {host_name}: members of mssql_manage_targets must define sql_version")
+
     return interfaces
 
 
@@ -479,7 +502,7 @@ def build_ansible_json(group_graph: dict[str, dict[str, Any]], resolved_hosts: d
         group = group_graph[group_name]
         groups.setdefault(group_name, {})
         if isinstance(group.get("hosts"), dict):
-            groups[group_name]["hosts"] = sorted(group["hosts"].keys())
+            groups[group_name]["hosts"] = sorted(set(group["hosts"]) | set(group.get("members", [])))
         if isinstance(group.get("vars"), dict):
             groups[group_name]["vars"] = copy.deepcopy(group["vars"])
         children = group.get("children")

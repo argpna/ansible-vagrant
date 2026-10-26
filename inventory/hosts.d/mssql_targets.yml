@@ -1,0 +1,23 @@
+---
+# Groups for the argpna.mssql integration suites. Hosts are defined in
+# mssql_linux.yml and mssql_windows.yml. `members` adds existing hosts to group(s).
+all:
+  children:
+    databases:
+      children:
+        mssql:
+          children:
+            mssql_install_targets:
+              children:
+                mssql_linux_apt: {}
+                mssql_linux_dnf: {}
+                mssql_windows_matrix: {}
+
+            mssql_manage_targets:
+              members:
+                - ubuntu2004-sql2019
+                - ubuntu2204-sql2022
+                - ubuntu2404-sql2025
+                - win2022-sql2019
+                - win2022-sql2022
+                - win2022-sql2025
