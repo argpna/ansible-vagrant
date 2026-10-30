@@ -6,28 +6,29 @@ Installs Kerberos client packages, configures name resolution for the lab
 domain, and writes `/etc/krb5.conf`.
 
 When `dns.mode` is `local_forwarder`, the role configures `dnsmasq` on
-`127.0.0.1` for AD-domain forwarding.
+`127.0.0.1` to forward queries for the AD domain.
 
 ## Variables
 
-### Mandatory Variables
+### Mandatory variables
 
-* `kerberos.realm`: The Kerberos realm to configure.
-* `kerberos.kdc_host`: The short hostname of the KDC or domain controller.
-* `kerberos.kdc_ip`: The IP address of the KDC or domain controller.
+* `kerberos.realm`: Kerberos realm to configure.
+* `kerberos.kdc_host`: Short hostname of the Key Distribution Center (KDC) or
+  domain controller.
+* `kerberos.kdc_ip`: IP address of the KDC or domain controller.
 * `dns.mode`: DNS behavior for the controller host.
 
-### Additional Variables Used When `dns.mode == 'local_forwarder'`
+### Variables when `dns.mode` is `local_forwarder`
 
-* `domain.name`: The AD DNS domain forwarded by `dnsmasq`.
-* `dns.upstream_server`: The upstream DNS server for the AD domain.
+* `domain.name`: AD DNS domain that `dnsmasq` forwards.
+* `dns.upstream_server`: Upstream DNS server for the AD domain.
 
-### Role Variables
+### Role variables
 
 * `linux_kerberos_client_dnf_packages`: Kerberos and DNS client packages for dnf platforms.
 * `linux_kerberos_client_apt_packages`: Kerberos and DNS client packages for apt platforms.
 
-## Examples
+## Example
 
 ```yml
 - name: configure kerberos on linux hosts
@@ -39,17 +40,16 @@ When `dns.mode` is `local_forwarder`, the role configures `dnsmasq` on
 
 ## Troubleshooting
 
-If Kerberos works but is unexpectedly slow, check the host resolver path first.
-For instance if the following is slow
+If Kerberos works but is slow, check the host resolver path first. The resolver
+is the likely cause if any of the following commands is slow, where `DC_FQDN` is
+the fully qualified domain name of the domain controller:
 
-* `getent hosts <dc fqdn>`
-* `kinit user@REALM`
-* `kvno host/<dc fqdn>`
+* `getent hosts DC_FQDN`
+* `kinit USER@REALM`
+* `kvno host/DC_FQDN`
 
-One common cause in this repo is that the host is not actually using the
-local DNS forwarder even though `dnsmasq` is configured.
-
-Quick checks:
+A common cause is that the host does not use the local DNS forwarder even though
+`dnsmasq` is configured. To check, run:
 
 ```sh
 cat /etc/resolv.conf
@@ -58,17 +58,17 @@ dig @127.0.0.1 domain-con-01.lab.local
 dig @127.0.0.1 lab.local
 ```
 
-If `dig @127.0.0.1 ...` is fast but `getent`, `kinit`, or `kvno` are slow,
-the host resolver is probably still pointing somewhere else.
+If the `dig @127.0.0.1` queries are fast but `getent`, `kinit`, or `kvno` are
+slow, the host resolver probably points somewhere else.
 
-General temporary fix when `/etc/resolv.conf` is not managed by another
-resolver service:
+If another resolver service does not manage `/etc/resolv.conf`, you can fix it
+temporarily:
 
 ```sh
 printf 'nameserver 127.0.0.1\n' | sudo tee /etc/resolv.conf
 ```
 
-After that, retry:
+Then retry the commands:
 
 ```sh
 time getent hosts domain-con-01.lab.local
@@ -77,33 +77,34 @@ time kinit vagrant-admin@LAB.LOCAL
 time kvno host/domain-con-01.lab.local
 ```
 
-If those become fast immediately, the issue is DNS resolver selection rather
-than Kerberos itself.
+If the commands become fast immediately, the issue is DNS resolver selection,
+not Kerberos.
 
 > [!CAUTION]
-> Do not overwrite `/etc/resolv.conf` blindly on systems where it is managed by
+> Do not overwrite `/etc/resolv.conf` directly on systems where
 > `systemd-resolved`, NetworkManager, `resolvconf`, cloud-init, or another
-> resolver manager. In those cases, update the active resolver configuration
-> through the appropriate service instead of replacing the file directly. A
-> manual `/etc/resolv.conf` edit may also be overwritten on reboot or during a
-> network restart, so do not treat it as a persistent fix.
+> resolver manager controls it. Update the active resolver configuration
+> through the service instead. A manual `/etc/resolv.conf` edit can also be
+> overwritten on reboot or during a network restart, so it is not a persistent
+> fix.
 
-Persistent fix options depend on what manages DNS on the host:
+### Persistent fix
 
-Quick ways to identify that:
+The persistent fix depends on what manages DNS on the host. To identify the
+manager, run:
 
 ```sh
 # Check whether /etc/resolv.conf is a plain file or a symlink to a managed stub
 ls -l /etc/resolv.conf
 
-# Check for common network/DNS managers that may be writing resolver state
+# Check for common network and DNS managers that may be writing resolver state
 ps -ef | grep -E 'dhclient|systemd-networkd|NetworkManager' | grep -v grep
 
 # Check whether systemd-resolved is active on the host
 systemctl is-active systemd-resolved
 ```
 
-General hints:
+Use the results as follows:
 
 * A plain `/etc/resolv.conf` file plus a running `dhclient` process usually
   means DHCP is writing resolver state.
@@ -112,21 +113,22 @@ General hints:
 * A running NetworkManager service often means DNS should be configured through
   the active NetworkManager connection profile.
 
+Then apply the fix for your resolver manager:
+
 * If the host uses `dhclient`, set the resolver there instead of editing
   `/etc/resolv.conf` directly. For example:
 
-```conf
-# /etc/dhcp/dhclient.conf
-prepend domain-name-servers 127.0.0.1;
-```
+  ```conf
+  # /etc/dhcp/dhclient.conf
+  prepend domain-name-servers 127.0.0.1;
+  ```
 
-This commonly results in both `127.0.0.1` and the DHCP-provided resolver being
-present in `/etc/resolv.conf`, with `127.0.0.1` listed first. That is fine as
-long as the local resolver is first and Kerberos/DNS lookups become fast.
-
+  This commonly puts both `127.0.0.1` and the DHCP-provided resolver in
+  `/etc/resolv.conf`, with `127.0.0.1` listed first. That is fine as long as the
+  local resolver is first and Kerberos and DNS lookups become fast.
 * If the host uses `systemd-networkd`, set `DNS=127.0.0.1` in the relevant
   `.network` file and restart `systemd-networkd`.
 * If the host uses `resolvconf`, configure the local nameserver through
-  `resolvconf` so generated resolver state keeps `127.0.0.1`.
-* If the host uses NetworkManager, configure the connection DNS to
-  `127.0.0.1` in NetworkManager instead of replacing `/etc/resolv.conf`.
+  `resolvconf`, so the generated resolver state keeps `127.0.0.1`.
+* If the host uses NetworkManager, set the connection DNS to `127.0.0.1` in
+  NetworkManager instead of replacing `/etc/resolv.conf`.

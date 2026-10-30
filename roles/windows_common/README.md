@@ -3,12 +3,12 @@
 ## Overview
 
 Provides shared helper tasks for Windows playbooks. The role includes local
-Windows modules for resolving the connection adapter name from `ansible_host`,
-keeping DNS registration enabled only on that adapter, and removing unexpected
-A records for the current hostname from the AD DNS zone while keeping the
-intended lab IP.
+Windows modules that resolve the connection adapter name from `ansible_host`,
+keep DNS registration enabled only on the adapter, and remove unexpected A
+records for the current hostname from the AD DNS zone while keeping the intended
+lab IP.
 
-## Role Modules
+## Role modules
 
 * `win_connection_adapter_info`: Finds enabled adapters assigned to an IP
   address.
@@ -19,16 +19,16 @@ intended lab IP.
 
 ## Variables
 
-### Mandatory Variables
+### Mandatory variables
 
-* `ansible_host`: The host IP address used to identify the connection adapter.
-* `windows_common_connection_adapter_name`: Required by the DNS-registration helper after
-  the connection adapter has been resolved.
+* `ansible_host`: Host IP address used to identify the connection adapter.
+* `windows_common_connection_adapter_name`: Required by the DNS registration
+  helper after the connection adapter has been resolved.
 * `domain.name`: Required by the DNS cleanup helper.
 * `domain.admin.upn`: Required by the DNS cleanup helper.
 * `domain.admin.password`: Required by the DNS cleanup helper.
 
-## Examples
+## Example
 
 ```yml
 - name: resolve the connection adapter

@@ -2,21 +2,22 @@
 
 ## Overview
 
-Sets up AD CS on the domain controller for the lab, publishes the workstation
-auto-enrollment certificate template, configures the enrollment GPO, and
-exports the lab CA chain.
+Sets up Active Directory Certificate Services (AD CS) on the domain controller,
+publishes the workstation auto-enrollment certificate template, configures the
+enrollment Group Policy Object (GPO), and exports the lab certificate authority
+(CA) chain.
 
 ## Variables
 
-### Mandatory Variables
+### Mandatory variables
 
-* `domain.name`: The AD DNS domain name.
-* `domain.admin.upn`: Domain account used for AD CS and GPO management tasks.
+* `domain.name`: AD DNS domain name.
+* `domain.admin.upn`: Domain account for AD CS and GPO management tasks.
 * `domain.admin.password`: Password for `domain.admin.upn`.
-* `certificates.autoenroll_template`: Certificate template name to manage and publish.
-* `certificates.gpo_name`: GPO name used for machine auto-enrollment.
+* `certificates.autoenroll_template`: Certificate template to manage and publish.
+* `certificates.gpo_name`: GPO used for machine auto-enrollment.
 
-## Examples
+## Example
 
 ```yml
 - name: configure ad cs on the domain controller

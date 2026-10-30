@@ -8,16 +8,16 @@ account.
 
 ## Variables
 
-### Mandatory Variables
+### Mandatory variables
 
-* `windows_common_connection_adapter_name`: The Windows adapter used for domain traffic.
-* `domain.name`: The AD DNS domain name to create.
-* `domain.safe_mode_password`: The safe mode password for DC promotion.
-* `domain.admin.username`: The initial domain admin account name.
-* `domain.admin.password`: The initial domain admin account password.
-* `domain.admin.upn`: The UPN used to validate the created account.
+* `windows_common_connection_adapter_name`: Windows adapter used for domain traffic.
+* `domain.name`: AD DNS domain name to create.
+* `domain.safe_mode_password`: Safe mode password for the domain controller promotion.
+* `domain.admin.username`: Initial domain admin account name.
+* `domain.admin.password`: Initial domain admin account password.
+* `domain.admin.upn`: User principal name (UPN) used to validate the created account.
 
-## Examples
+## Example
 
 ```yml
 - name: promote the domain controller

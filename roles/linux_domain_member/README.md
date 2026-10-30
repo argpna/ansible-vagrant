@@ -2,41 +2,43 @@
 
 ## Overview
 
-Joins a Linux host to the lab Active Directory domain. Installs
-realmd/sssd/adcli (and friends) for the host package manager, points
-systemd-resolved at the domain controller for the lab domain (so AD SRV
-discovery and short-name resolution work), creates the host's A record in the
-AD DNS zone, joins the realm with the domain admin account, and validates the
-join by resolving the admin identity through sssd.
+Joins a Linux host to the lab Active Directory domain. The role installs the
+realmd, sssd, adcli, and related packages for the host package manager. It
+points systemd-resolved at the domain controller for the lab domain, so Active
+Directory SRV record discovery and short-name resolution work. It then creates
+the host's A record in the AD DNS zone, joins the realm with the domain admin
+account, and validates the join by resolving the admin identity through sssd.
 
-Run `linux_kerberos_client` role first - it writes `/etc/krb5.conf` and the
-Kerberos client packages this role's realm join depends on.
-`playbooks/linux-domain-members.yml` runs both roles in the correct order.
+Run the `linux_kerberos_client` role first. It writes `/etc/krb5.conf` and
+installs the Kerberos client packages that the realm join depends on.
+[`linux-domain-members.yml`](../../playbooks/linux-domain-members.yml) runs both
+roles in order.
 
-On hosts without systemd-resolved, name resolution instead relies on the
-dnsmasq forwarder configured by `linux_kerberos_client`.
+On hosts without systemd-resolved, name resolution relies on the dnsmasq
+forwarder that `linux_kerberos_client` configures.
 
 ## Variables
 
-### Mandatory Variables
+### Mandatory variables
 
-* `domain.name`: The AD DNS domain to join.
+* `domain.name`: AD DNS domain to join.
 * `domain.controller_host`: Inventory host name of the domain controller, used
   as the `delegate_to` target for creating the host's DNS A record.
-* `domain.controller_ip`: The IP address of the domain controller.
-* `domain.admin.username`: The domain admin's sAMAccountName, used to validate
-  the realm join via `id`.
-* `domain.admin.upn`: The domain admin's UPN, used for `realm join`.
-* `domain.admin.password`: The password for `domain.admin.upn`.
+* `domain.controller_ip`: IP address of the domain controller.
+* `domain.admin.username`: `sAMAccountName` of the domain admin, used to
+  validate the realm join with `id`.
+* `domain.admin.upn`: User principal name (UPN) of the domain admin, used for
+  `realm join`.
+* `domain.admin.password`: Password for `domain.admin.upn`.
 
-### Role Variables
+### Role variables
 
-* `linux_domain_member_dnf_packages`: realmd/sssd packages for dnf platforms.
-* `linux_domain_member_apt_packages`: realmd/sssd packages for apt platforms.
+* `linux_domain_member_dnf_packages`: realmd and sssd packages for dnf platforms.
+* `linux_domain_member_apt_packages`: realmd and sssd packages for apt platforms.
 * `linux_domain_member_resolved_dropin`: Path to the systemd-resolved drop-in
   that routes lab domain queries to the domain controller.
 
-## Examples
+## Example
 
 ```yml
 - name: join MSSQL Linux cluster hosts to the lab domain

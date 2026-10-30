@@ -7,18 +7,18 @@ its SSH key and passwordless sudo access.
 
 ## Variables
 
-### Mandatory Variables
+### Mandatory variables
 
-* `controller.admin_user.name`: The Linux admin user name.
-* `controller.admin_user.group`: The Linux admin group name.
-* `controller.admin_user.password_hash`: The hashed password for the admin user.
-* `controller.admin_user.authorized_key`: The SSH public key to add for the admin user.
+* `controller.admin_user.name`: Linux admin user name.
+* `controller.admin_user.group`: Linux admin group name.
+* `controller.admin_user.password_hash`: Hashed password for the admin user.
+* `controller.admin_user.authorized_key`: SSH public key to add for the admin user.
 
-### Role Variables
+### Role variables
 
-* `linux_base_packages`: Baseline package list for both apt and dnf platforms.
+* `linux_base_packages`: Baseline packages for both apt and dnf platforms.
 
-## Examples
+## Example
 
 ```yml
 - name: prepare the controller host
