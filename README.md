@@ -303,7 +303,7 @@ Host networking comes from the resolved inventory interface data in
 `inventory/inventory.py`.
 
 When you run `vagrant up HOST`, `vagrant reload HOST`, or `vagrant resume HOST`,
-Vagrant first creates any missing libvirt networks attached to that host on the
+Vagrant first creates any missing libvirt networks attached to the host on the
 host system. For example, `win-cluster-n01` uses `mssql-main`.
 
 The host-side network definitions are managed by `libvirt-host-network.yml`.
