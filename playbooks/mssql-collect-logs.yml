@@ -1,0 +1,52 @@
+---
+# Copy SQL Server logs from the guests to the machine running ansible-playbook.
+# Each file is saved as <mssql_logs_dest>/<host>/<path on the guest>.
+#
+# Usage examples:
+#   ansible-playbook playbooks/mssql-collect-logs.yml --limit ubuntu2204-sql2022 -e mssql_logs_dest=/tmp/guest-logs
+#
+- name: collect SQL Server logs from MSSQL Linux hosts
+  hosts: mssql_install_targets:mssql_manage_targets:mssql_linux_unsupported:&linux
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: find the SQL Server logs
+      ansible.builtin.find:
+        paths: /var/opt/mssql/log
+        patterns:
+          - errorlog*
+          - sqlagent*
+        file_type: file
+      register: mssql_collect_found
+
+    - name: fetch the SQL Server logs
+      ansible.builtin.fetch:
+        src: "{{ item.path }}"
+        dest: "{{ mssql_logs_dest }}/"
+      loop: "{{ mssql_collect_found.files }}"
+      loop_control:
+        label: "{{ item.path }}"
+
+- name: collect SQL Server logs from MSSQL Windows hosts
+  hosts: mssql_install_targets:mssql_manage_targets:&windows
+  gather_facts: false
+
+  tasks:
+    - name: find the engine error logs and setup summaries
+      ansible.windows.win_find:
+        paths: C:\Program Files\Microsoft SQL Server
+        patterns:
+          - ERRORLOG*
+          - Summary.txt
+          - Detail.txt
+        recurse: true
+      register: mssql_collect_found
+
+    - name: fetch the engine error logs and setup summaries
+      ansible.builtin.fetch:
+        src: "{{ item.path }}"
+        dest: "{{ mssql_logs_dest }}/"
+      loop: "{{ mssql_collect_found.files }}"
+      loop_control:
+        label: "{{ item.path }}"
